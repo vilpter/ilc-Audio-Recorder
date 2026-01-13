@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# SQLite databases
+*.db
+*.db-journal
+*.db.meta
+
+# Logs
+*.log
+logs/
+
+# Data directory
+data/
+
+# Recordings (don't commit audio files)
+recordings/
+*.wav
+*.mp3
+*.flac
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+test.wav
+test_*.wav

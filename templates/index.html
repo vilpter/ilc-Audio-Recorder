@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ILC Audio Recorder - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation -->
+    <nav class="bg-blue-600 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">ILC Audio Recorder</h1>
+            <div class="space-x-4">
+                <a href="/" class="hover:underline font-semibold">Dashboard</a>
+                <a href="/schedule" class="hover:underline">Schedule</a>
+                <a href="/calendar" class="hover:underline">Calendar</a>
+                <a href="/recordings" class="hover:underline">Recordings</a>
+                <a href="/templates" class="hover:underline">Templates</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-6">
+        <!-- Status Card -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-bold mb-4">Recording Status</h2>
+
+            <div id="status-indicator" class="mb-6">
+                <div class="flex items-center">
+                    <div id="status-dot" class="w-4 h-4 rounded-full mr-3"></div>
+                    <span id="status-text" class="text-lg font-semibold"></span>
+                </div>
+                <div id="recording-info" class="mt-4 text-gray-600"></div>
+            </div>
+
+            <!-- Manual Control -->
+            <div id="manual-controls">
+                <!-- Start Recording Form -->
+                <div id="start-form" class="space-y-4">
+                    <h3 class="text-lg font-semibold">Manual Recording</h3>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Recording Name</label>
+                        <input type="text" id="recording-name"
+                               class="w-full border rounded px-3 py-2"
+                               placeholder="manual_recording"
+                               value="manual_recording">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Duration</label>
+                        <div class="flex space-x-4">
+                            <select id="duration-preset" class="border rounded px-3 py-2">
+                                <option value="300">5 minutes</option>
+                                <option value="600">10 minutes</option>
+                                <option value="900">15 minutes</option>
+                                <option value="1800">30 minutes</option>
+                                <option value="3600" selected>1 hour</option>
+                                <option value="7200">2 hours</option>
+                                <option value="14400">4 hours</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+                            <input type="number" id="custom-duration"
+                                   class="border rounded px-3 py-2 w-32"
+                                   placeholder="Seconds"
+                                   style="display: none;">
+                        </div>
+                    </div>
+
+                    <div class="flex items-center">
+                        <input type="checkbox" id="allow-long" class="mr-2">
+                        <label for="allow-long" class="text-sm">
+                            Allow longer recording (override 4-hour limit)
+                        </label>
+                    </div>
+
+                    <button id="start-btn"
+                            class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-semibold">
+                        Start Recording
+                    </button>
+                </div>
+
+                <!-- Stop Recording Button -->
+                <div id="stop-form" style="display: none;">
+                    <button id="stop-btn"
+                            class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded font-semibold">
+                        Stop Recording
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Disk Space Card -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-bold mb-4">Disk Space</h2>
+            <div id="disk-info" class="space-y-2">
+                <div class="flex justify-between">
+                    <span>Total:</span>
+                    <span id="disk-total" class="font-semibold"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Used:</span>
+                    <span id="disk-used" class="font-semibold"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Free:</span>
+                    <span id="disk-free" class="font-semibold text-green-600"></span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-4 mt-4">
+                    <div id="disk-bar" class="bg-blue-600 h-4 rounded-full"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg"
+         style="display: none;">
+        <span id="toast-message"></span>
+    </div>
+
+    <script>
+        // Duration preset handler
+        document.getElementById('duration-preset').addEventListener('change', function() {
+            const customInput = document.getElementById('custom-duration');
+            if (this.value === 'custom') {
+                customInput.style.display = 'block';
+            } else {
+                customInput.style.display = 'none';
+            }
+        });
+
+        // Get actual duration value
+        function getDuration() {
+            const preset = document.getElementById('duration-preset');
+            if (preset.value === 'custom') {
+                return parseInt(document.getElementById('custom-duration').value) || 3600;
+            }
+            return parseInt(preset.value);
+        }
+
+        // Show toast message
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            toastMessage.textContent = message;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, duration);
+        }
+
+        // Update status display
+        function updateStatus(status) {
+            const statusDot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            const recordingInfo = document.getElementById('recording-info');
+            const startForm = document.getElementById('start-form');
+            const stopForm = document.getElementById('stop-form');
+
+            if (status.is_recording) {
+                statusDot.className = 'w-4 h-4 rounded-full mr-3 bg-red-600 animate-pulse';
+                statusText.textContent = 'RECORDING';
+                statusText.className = 'text-lg font-semibold text-red-600';
+
+                if (status.current_session) {
+                    const startTime = new Date(status.current_session.start_time);
+                    recordingInfo.innerHTML = `
+                        <p><strong>Name:</strong> ${status.current_session.name_prefix}</p>
+                        <p><strong>Started:</strong> ${startTime.toLocaleString()}</p>
+                        <p><strong>Duration:</strong> ${status.current_session.duration}s</p>
+                        <p><strong>Files:</strong></p>
+                        <p class="text-sm ml-4">• ${status.current_session.source_a.split('/').pop()}</p>
+                        <p class="text-sm ml-4">• ${status.current_session.source_b.split('/').pop()}</p>
+                    `;
+                }
+
+                startForm.style.display = 'none';
+                stopForm.style.display = 'block';
+            } else {
+                statusDot.className = 'w-4 h-4 rounded-full mr-3 bg-green-600';
+                statusText.textContent = 'IDLE';
+                statusText.className = 'text-lg font-semibold text-green-600';
+                recordingInfo.innerHTML = '<p>No active recording</p>';
+
+                startForm.style.display = 'block';
+                stopForm.style.display = 'none';
+            }
+        }
+
+        // Update disk space display
+        function updateDiskSpace() {
+            fetch('/api/system/disk_space')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('disk-total').textContent = formatBytes(data.total);
+                    document.getElementById('disk-used').textContent = formatBytes(data.used);
+                    document.getElementById('disk-free').textContent = formatBytes(data.free);
+                    document.getElementById('disk-bar').style.width = data.percent_used + '%';
+                });
+        }
+
+        // Format bytes to human readable
+        function formatBytes(bytes) {
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let size = bytes;
+            let unitIndex = 0;
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+            return size.toFixed(2) + ' ' + units[unitIndex];
+        }
+
+        // Poll status
+        function pollStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(status => {
+                    updateStatus(status);
+                });
+        }
+
+        // Start recording
+        document.getElementById('start-btn').addEventListener('click', function() {
+            const name = document.getElementById('recording-name').value || 'manual_recording';
+            const duration = getDuration();
+            const allowLong = document.getElementById('allow-long').checked;
+
+            fetch('/api/recording/start', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    name: name,
+                    duration: duration,
+                    allow_long_recording: allowLong
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Recording started successfully');
+                    pollStatus();
+                } else {
+                    showToast('Error: ' + data.message, 5000);
+                }
+            })
+            .catch(error => {
+                showToast('Error: ' + error.message, 5000);
+            });
+        });
+
+        // Stop recording
+        document.getElementById('stop-btn').addEventListener('click', function() {
+            if (confirm('Stop the current recording?')) {
+                fetch('/api/recording/stop', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('Recording stopped');
+                        pollStatus();
+                    } else {
+                        showToast('Error: ' + data.message, 5000);
+                    }
+                })
+                .catch(error => {
+                    showToast('Error: ' + error.message, 5000);
+                });
+            }
+        });
+
+        // Initial load
+        pollStatus();
+        updateDiskSpace();
+
+        // Poll every 2 seconds
+        setInterval(pollStatus, 2000);
+        setInterval(updateDiskSpace, 10000);
+    </script>
+</body>
+</html>

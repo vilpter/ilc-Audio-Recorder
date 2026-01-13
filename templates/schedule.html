@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ILC Audio Recorder - Schedule</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation -->
+    <nav class="bg-blue-600 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">ILC Audio Recorder</h1>
+            <div class="space-x-4">
+                <a href="/" class="hover:underline">Dashboard</a>
+                <a href="/schedule" class="hover:underline font-semibold">Schedule</a>
+                <a href="/calendar" class="hover:underline">Calendar</a>
+                <a href="/recordings" class="hover:underline">Recordings</a>
+                <a href="/templates" class="hover:underline">Templates</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- New Schedule Form -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold mb-4">Create Schedule</h2>
+
+                <form id="schedule-form" class="space-y-4">
+                    <!-- Recording Name -->
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Recording Name</label>
+                        <input type="text" id="schedule-name" required
+                               class="w-full border rounded px-3 py-2"
+                               placeholder="scheduled_recording">
+                    </div>
+
+                    <!-- Duration -->
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Duration</label>
+                        <select id="schedule-duration" class="w-full border rounded px-3 py-2">
+                            <option value="300">5 minutes</option>
+                            <option value="600">10 minutes</option>
+                            <option value="900">15 minutes</option>
+                            <option value="1800">30 minutes</option>
+                            <option value="3600" selected>1 hour</option>
+                            <option value="7200">2 hours</option>
+                            <option value="14400">4 hours</option>
+                            <option value="21600">6 hours</option>
+                        </select>
+                    </div>
+
+                    <!-- Schedule Type -->
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Schedule Type</label>
+                        <select id="schedule-type" class="w-full border rounded px-3 py-2">
+                            <option value="one_time">One-Time</option>
+                            <option value="recurring">Recurring</option>
+                        </select>
+                    </div>
+
+                    <!-- One-Time Options -->
+                    <div id="one-time-options" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Start Date & Time</label>
+                            <input type="datetime-local" id="start-datetime" required
+                                   class="w-full border rounded px-3 py-2">
+                        </div>
+                    </div>
+
+                    <!-- Recurring Options -->
+                    <div id="recurring-options" class="space-y-4" style="display: none;">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Recurrence Pattern</label>
+                            <select id="recurrence-type" class="w-full border rounded px-3 py-2">
+                                <option value="daily">Daily</option>
+                                <option value="weekdays">Weekdays (Mon-Fri)</option>
+                                <option value="weekends">Weekends (Sat-Sun)</option>
+                                <option value="weekly">Weekly (Custom Days)</option>
+                                <option value="monthly">Monthly (Specific Day)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Start Time</label>
+                            <input type="time" id="recurrence-time" required
+                                   class="w-full border rounded px-3 py-2"
+                                   value="09:00">
+                        </div>
+
+                        <!-- Weekly Days Selection -->
+                        <div id="weekly-days-options" style="display: none;">
+                            <label class="block text-sm font-medium mb-2">Select Days</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <label class="flex items-center">
+                                    <input type="checkbox" value="0" class="mr-2"> Monday
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" value="1" class="mr-2"> Tuesday
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" value="2" class="mr-2"> Wednesday
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" value="3" class="mr-2"> Thursday
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" value="4" class="mr-2"> Friday
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" value="5" class="mr-2"> Saturday
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" value="6" class="mr-2"> Sunday
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Monthly Day Selection -->
+                        <div id="monthly-day-options" style="display: none;">
+                            <label class="block text-sm font-medium mb-1">Day of Month (1-31)</label>
+                            <input type="number" id="day-of-month" min="1" max="31"
+                                   class="w-full border rounded px-3 py-2"
+                                   value="1">
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Notes (Optional)</label>
+                        <textarea id="schedule-notes" rows="2"
+                                  class="w-full border rounded px-3 py-2"
+                                  placeholder="Optional notes about this recording"></textarea>
+                    </div>
+
+                    <!-- Load from Template -->
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Load from Template</label>
+                        <select id="template-select" class="w-full border rounded px-3 py-2">
+                            <option value="">-- Select Template --</option>
+                            {% for template in templates %}
+                            <option value="{{ template.id }}">{{ template.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit"
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold">
+                        Create Schedule
+                    </button>
+                </form>
+            </div>
+
+            <!-- Scheduled Jobs List -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold mb-4">Scheduled Recordings</h2>
+
+                <div id="jobs-list" class="space-y-3">
+                    {% if jobs %}
+                        {% for job in jobs %}
+                        <div class="border rounded p-4 job-item" data-job-id="{{ job.id }}">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <h3 class="font-semibold">{{ job.name }}</h3>
+                                    <p class="text-sm text-gray-600">
+                                        {% if job.recurrence_pattern %}
+                                            {{ job.recurrence_pattern }}
+                                        {% else %}
+                                            One-time: {{ job.next_run_formatted }}
+                                        {% endif %}
+                                    </p>
+                                    <p class="text-sm text-gray-500">
+                                        Duration: {{ job.duration }}s
+                                    </p>
+                                    {% if job.notes %}
+                                    <p class="text-sm text-gray-500 mt-1">
+                                        {{ job.notes }}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                                <button class="delete-job-btn text-red-600 hover:text-red-800"
+                                        data-job-id="{{ job.id }}">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-gray-500 text-center py-8">No scheduled recordings</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg"
+         style="display: none;">
+        <span id="toast-message"></span>
+    </div>
+
+    <script>
+        // Show toast message
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            toastMessage.textContent = message;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, duration);
+        }
+
+        // Schedule type change handler
+        document.getElementById('schedule-type').addEventListener('change', function() {
+            const oneTimeOptions = document.getElementById('one-time-options');
+            const recurringOptions = document.getElementById('recurring-options');
+
+            if (this.value === 'one_time') {
+                oneTimeOptions.style.display = 'block';
+                recurringOptions.style.display = 'none';
+            } else {
+                oneTimeOptions.style.display = 'none';
+                recurringOptions.style.display = 'block';
+            }
+        });
+
+        // Recurrence type change handler
+        document.getElementById('recurrence-type').addEventListener('change', function() {
+            const weeklyDays = document.getElementById('weekly-days-options');
+            const monthlyDay = document.getElementById('monthly-day-options');
+
+            weeklyDays.style.display = this.value === 'weekly' ? 'block' : 'none';
+            monthlyDay.style.display = this.value === 'monthly' ? 'block' : 'none';
+        });
+
+        // Template selection handler
+        document.getElementById('template-select').addEventListener('change', function() {
+            if (!this.value) return;
+
+            fetch(`/api/templates/get/${this.value}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const template = data.template;
+                        document.getElementById('schedule-name').value = template.name;
+                        document.getElementById('schedule-duration').value = template.duration;
+
+                        if (template.recurrence_type && template.recurrence_type !== 'one_time') {
+                            document.getElementById('schedule-type').value = 'recurring';
+                            document.getElementById('schedule-type').dispatchEvent(new Event('change'));
+
+                            document.getElementById('recurrence-type').value = template.recurrence_type;
+                            document.getElementById('recurrence-time').value = template.recurrence_time || '09:00';
+
+                            if (template.recurrence_type === 'weekly' && template.recurrence_days) {
+                                const days = template.recurrence_days.split(',');
+                                document.querySelectorAll('#weekly-days-options input[type="checkbox"]').forEach(cb => {
+                                    cb.checked = days.includes(cb.value);
+                                });
+                            }
+
+                            if (template.recurrence_type === 'monthly' && template.recurrence_day_of_month) {
+                                document.getElementById('day-of-month').value = template.recurrence_day_of_month;
+                            }
+
+                            document.getElementById('recurrence-type').dispatchEvent(new Event('change'));
+                        }
+
+                        if (template.description) {
+                            document.getElementById('schedule-notes').value = template.description;
+                        }
+
+                        showToast('Template loaded');
+                    }
+                });
+        });
+
+        // Form submit handler
+        document.getElementById('schedule-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const scheduleType = document.getElementById('schedule-type').value;
+            const name = document.getElementById('schedule-name').value;
+            const duration = parseInt(document.getElementById('schedule-duration').value);
+            const notes = document.getElementById('schedule-notes').value;
+
+            const data = {
+                type: scheduleType,
+                name: name,
+                duration: duration,
+                notes: notes
+            };
+
+            if (scheduleType === 'one_time') {
+                const datetime = document.getElementById('start-datetime').value;
+                if (!datetime) {
+                    showToast('Please select a start date and time', 3000);
+                    return;
+                }
+                data.start_datetime = datetime;
+            } else {
+                const recurrenceType = document.getElementById('recurrence-type').value;
+                const recurrenceTime = document.getElementById('recurrence-time').value;
+
+                data.recurrence_type = recurrenceType;
+                data.start_time = recurrenceTime;
+
+                if (recurrenceType === 'weekly') {
+                    const selectedDays = [];
+                    document.querySelectorAll('#weekly-days-options input[type="checkbox"]:checked').forEach(cb => {
+                        selectedDays.push(parseInt(cb.value));
+                    });
+
+                    if (selectedDays.length === 0) {
+                        showToast('Please select at least one day for weekly recurrence', 3000);
+                        return;
+                    }
+                    data.days_of_week = selectedDays;
+                }
+
+                if (recurrenceType === 'monthly') {
+                    data.day_of_month = parseInt(document.getElementById('day-of-month').value);
+                }
+            }
+
+            fetch('/api/schedule/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showToast('Schedule created successfully');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast('Error: ' + result.message, 5000);
+                }
+            })
+            .catch(error => {
+                showToast('Error: ' + error.message, 5000);
+            });
+        });
+
+        // Delete job handlers
+        document.querySelectorAll('.delete-job-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const jobId = this.getAttribute('data-job-id');
+
+                if (confirm('Delete this scheduled recording?')) {
+                    fetch(`/api/schedule/delete/${jobId}`, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            showToast('Schedule deleted');
+                            document.querySelector(`.job-item[data-job-id="${jobId}"]`).remove();
+                        } else {
+                            showToast('Error: ' + result.message, 5000);
+                        }
+                    })
+                    .catch(error => {
+                        showToast('Error: ' + error.message, 5000);
+                    });
+                }
+            });
+        });
+
+        // Set minimum datetime to now
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        document.getElementById('start-datetime').min = now.toISOString().slice(0, 16);
+    </script>
+</body>
+</html>

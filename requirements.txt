@@ -1,0 +1,19 @@
+# ILC Audio Recorder - Python Dependencies
+# Install with: pip3 install -r requirements.txt
+
+# Web Framework
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# Job Scheduling
+APScheduler==3.10.4
+
+# Database
+SQLAlchemy==2.0.23
+
+# Date/Time Utilities
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Timezone support for APScheduler
+tzlocal==5.2
