@@ -3,358 +3,280 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ILC Audio Recorder - Templates</title>
+    <title>Audio Recorder - Templates</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100">
-    <!-- Navigation -->
-    <nav class="bg-blue-600 text-white p-4">
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold">ILC Audio Recorder</h1>
+            <h1 class="text-2xl font-bold">Audio Recorder</h1>
             <div class="space-x-4">
+                <div class="flex items-center space-x-6">
+                <div class="space-x-4">
                 <a href="/" class="hover:underline">Dashboard</a>
                 <a href="/schedule" class="hover:underline">Schedule</a>
                 <a href="/calendar" class="hover:underline">Calendar</a>
-                <a href="/recordings" class="hover:underline">Recordings</a>
                 <a href="/templates" class="hover:underline font-semibold">Templates</a>
+                <a href="/recordings" class="hover:underline">Recordings</a>
+                <a href="/settings" class="hover:underline">Settings</a>
             </div>
+                <div id="current-datetime" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
+                    Loading...
+                </div>
+            </div>
+        </div>
         </div>
     </nav>
 
     <div class="container mx-auto p-6">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Create/Edit Template Form -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h2 class="text-xl font-bold mb-4" id="form-title">Create Template</h2>
-
-                <form id="template-form" class="space-y-4">
-                    <input type="hidden" id="template-id" value="">
-
-                    <!-- Template Name -->
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Template Name *</label>
-                        <input type="text" id="template-name" required
-                               class="w-full border rounded px-3 py-2"
-                               placeholder="My Recording Template">
-                    </div>
-
-                    <!-- Duration -->
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Duration *</label>
-                        <select id="template-duration" class="w-full border rounded px-3 py-2">
-                            <option value="300">5 minutes</option>
-                            <option value="600">10 minutes</option>
-                            <option value="900">15 minutes</option>
-                            <option value="1800">30 minutes</option>
-                            <option value="3600" selected>1 hour</option>
-                            <option value="7200">2 hours</option>
-                            <option value="14400">4 hours</option>
-                            <option value="21600">6 hours</option>
-                        </select>
-                    </div>
-
-                    <!-- Recurrence Type -->
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Recurrence Type</label>
-                        <select id="template-recurrence-type" class="w-full border rounded px-3 py-2">
-                            <option value="one_time">One-Time (Manual)</option>
-                            <option value="daily">Daily</option>
-                            <option value="weekdays">Weekdays (Mon-Fri)</option>
-                            <option value="weekends">Weekends (Sat-Sun)</option>
-                            <option value="weekly">Weekly (Custom Days)</option>
-                            <option value="monthly">Monthly (Specific Day)</option>
-                        </select>
-                    </div>
-
-                    <!-- Recurrence Time -->
-                    <div id="recurrence-time-div" style="display: none;">
-                        <label class="block text-sm font-medium mb-1">Start Time</label>
-                        <input type="time" id="template-recurrence-time"
-                               class="w-full border rounded px-3 py-2"
-                               value="09:00">
-                    </div>
-
-                    <!-- Weekly Days -->
-                    <div id="weekly-days-div" style="display: none;">
-                        <label class="block text-sm font-medium mb-2">Select Days</label>
-                        <div class="grid grid-cols-2 gap-2">
-                            <label class="flex items-center">
-                                <input type="checkbox" value="0" class="mr-2 weekly-day"> Monday
-                            </label>
-                            <label class="flex items-center">
-                                <input type="checkbox" value="1" class="mr-2 weekly-day"> Tuesday
-                            </label>
-                            <label class="flex items-center">
-                                <input type="checkbox" value="2" class="mr-2 weekly-day"> Wednesday
-                            </label>
-                            <label class="flex items-center">
-                                <input type="checkbox" value="3" class="mr-2 weekly-day"> Thursday
-                            </label>
-                            <label class="flex items-center">
-                                <input type="checkbox" value="4" class="mr-2 weekly-day"> Friday
-                            </label>
-                            <label class="flex items-center">
-                                <input type="checkbox" value="5" class="mr-2 weekly-day"> Saturday
-                            </label>
-                            <label class="flex items-center">
-                                <input type="checkbox" value="6" class="mr-2 weekly-day"> Sunday
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Monthly Day -->
-                    <div id="monthly-day-div" style="display: none;">
-                        <label class="block text-sm font-medium mb-1">Day of Month (1-31)</label>
-                        <input type="number" id="template-day-of-month" min="1" max="31"
-                               class="w-full border rounded px-3 py-2"
-                               value="1">
-                    </div>
-
-                    <!-- Description -->
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Description</label>
-                        <textarea id="template-description" rows="3"
-                                  class="w-full border rounded px-3 py-2"
-                                  placeholder="Optional description or notes"></textarea>
-                    </div>
-
-                    <!-- Buttons -->
-                    <div class="flex space-x-2">
-                        <button type="submit"
-                                class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold">
-                            Save Template
-                        </button>
-                        <button type="button" id="cancel-btn"
-                                class="bg-gray-300 hover:bg-gray-400 px-6 py-2 rounded font-semibold"
-                                style="display: none;">
-                            Cancel
-                        </button>
-                    </div>
-                </form>
+        <!-- Create New Template -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Create New Template</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-gray-700 mb-2">Template Name *</label>
+                    <input type="text" id="template-name" placeholder="e.g., Morning News (2hr)"
+                        class="w-full border border-gray-300 rounded px-3 py-2" required>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 mb-2">Duration (minutes) *</label>
+                    <input type="number" id="template-duration" value="60" min="1"
+                        class="w-full border border-gray-300 rounded px-3 py-2" required>
+                </div>
+                
+                <div class="col-span-1 md:col-span-2">
+                    <label class="block text-gray-700 mb-2">Notes</label>
+                    <input type="text" id="template-notes" placeholder="Optional description"
+                        class="w-full border border-gray-300 rounded px-3 py-2">
+                </div>
             </div>
 
-            <!-- Templates List -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h2 class="text-xl font-bold mb-4">Saved Templates</h2>
+            <!-- Recurrence Pattern (Optional) -->
+            <div class="mt-4 border-t pt-4">
+                <label class="flex items-center mb-2">
+                    <input type="checkbox" id="template-recurring" onchange="toggleTemplateRecurring()" class="mr-2">
+                    <span class="text-gray-700 font-medium">Include Recurring Pattern</span>
+                </label>
 
-                <div id="templates-list" class="space-y-3">
-                    {% if templates %}
-                        {% for template in templates %}
-                        <div class="border rounded p-4 template-item" data-template-id="{{ template.id }}">
-                            <div class="flex justify-between items-start">
-                                <div class="flex-1">
-                                    <h3 class="font-semibold">{{ template.name }}</h3>
-                                    <p class="text-sm text-gray-600">
-                                        Duration: {{ (template.duration // 60) }} minutes
-                                    </p>
-                                    <p class="text-sm text-gray-600">
-                                        Type: {{ template.recurrence_type or 'one_time' }}
-                                        {% if template.recurrence_time %}
-                                            at {{ template.recurrence_time }}
-                                        {% endif %}
-                                    </p>
-                                    {% if template.description %}
-                                    <p class="text-sm text-gray-500 mt-1">
-                                        {{ template.description }}
-                                    </p>
-                                    {% endif %}
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button class="edit-template-btn text-blue-600 hover:text-blue-800"
-                                            data-template-id="{{ template.id }}">
-                                        Edit
-                                    </button>
-                                    <button class="delete-template-btn text-red-600 hover:text-red-800"
-                                            data-template-id="{{ template.id }}">
-                                        Delete
-                                    </button>
-                                </div>
-                            </div>
+                <div id="template-recurring-options" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                    <div>
+                        <label class="block text-gray-700 mb-2">Recurrence Type</label>
+                        <select id="template-recurrence-type" onchange="updateTemplateRecurringUI()"
+                            class="w-full border border-gray-300 rounded px-3 py-2">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+
+                    <!-- Weekly options -->
+                    <div id="template-weekly-options" class="hidden">
+                        <label class="block text-gray-700 mb-2">Days of Week</label>
+                        <div class="flex flex-wrap gap-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" value="0" class="template-weekday-check mr-1"> Mon
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="1" class="template-weekday-check mr-1"> Tue
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="2" class="template-weekday-check mr-1"> Wed
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="3" class="template-weekday-check mr-1"> Thu
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="4" class="template-weekday-check mr-1"> Fri
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="5" class="template-weekday-check mr-1"> Sat
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="6" class="template-weekday-check mr-1"> Sun
+                            </label>
                         </div>
-                        {% endfor %}
-                    {% else %}
-                        <p class="text-gray-500 text-center py-8">No templates saved</p>
-                    {% endif %}
+                    </div>
+
+                    <!-- Monthly options -->
+                    <div id="template-monthly-options" class="hidden">
+                        <label class="block text-gray-700 mb-2">Day of Month</label>
+                        <input type="number" id="template-month-day" value="1" min="1" max="31"
+                            class="w-full border border-gray-300 rounded px-3 py-2">
+                    </div>
                 </div>
+            </div>
+
+            <button onclick="createTemplate()" 
+                class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-6 rounded">
+                Create Template
+            </button>
+        </div>
+
+        <!-- Existing Templates -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Saved Templates</h2>
+            
+            <div id="templates-container">
+                {% if templates %}
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {% for template in templates %}
+                    <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow" id="template-card-{{ template.id }}">
+                        <h3 class="font-semibold text-gray-800 mb-2">{{ template.name }}</h3>
+                        <div class="text-sm text-gray-600 space-y-1">
+                            <div>Duration: <strong>{{ template.duration // 60 }} minutes</strong></div>
+                            {% if template.recurrence_pattern %}
+                            <div class="text-purple-600">
+                                <strong>Recurring Pattern Set</strong>
+                            </div>
+                            {% endif %}
+                            {% if template.notes %}
+                            <div class="text-gray-500 italic">{{ template.notes }}</div>
+                            {% endif %}
+                            {% if template.last_used %}
+                            <div class="text-xs text-gray-400">Last used: {{ template.last_used[:10] }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="mt-3 flex space-x-2">
+                            <a href="/schedule?template={{ template.id }}" 
+                                class="flex-1 text-center bg-green-500 hover:bg-green-600 text-white text-sm px-3 py-2 rounded">
+                                Use
+                            </a>
+                            <button onclick="deleteTemplate('{{ template.id }}')" 
+                                class="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-2 rounded">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-8 text-gray-500">
+                    No templates saved yet. Create your first template above!
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Message Toast -->
-    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg"
-         style="display: none;">
-        <span id="toast-message"></span>
-    </div>
-
     <script>
-        let isEditMode = false;
-
-        // Show toast message
-        function showToast(message, duration = 3000) {
-            const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toast-message');
-            toastMessage.textContent = message;
-            toast.style.display = 'block';
-            setTimeout(() => {
-                toast.style.display = 'none';
-            }, duration);
-        }
-
-        // Recurrence type change handler
-        document.getElementById('template-recurrence-type').addEventListener('change', function() {
-            const recurrenceTimeDiv = document.getElementById('recurrence-time-div');
-            const weeklyDaysDiv = document.getElementById('weekly-days-div');
-            const monthlyDayDiv = document.getElementById('monthly-day-div');
-
-            const isRecurring = this.value !== 'one_time';
-            recurrenceTimeDiv.style.display = isRecurring ? 'block' : 'none';
-
-            weeklyDaysDiv.style.display = this.value === 'weekly' ? 'block' : 'none';
-            monthlyDayDiv.style.display = this.value === 'monthly' ? 'block' : 'none';
-        });
-
-        // Form submit handler
-        document.getElementById('template-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const templateId = document.getElementById('template-id').value;
-            const name = document.getElementById('template-name').value;
-            const duration = parseInt(document.getElementById('template-duration').value);
-            const recurrenceType = document.getElementById('template-recurrence-type').value;
-            const description = document.getElementById('template-description').value;
-
-            const data = {
-                name: name,
-                duration: duration,
-                recurrence_type: recurrenceType,
-                description: description
+        // Update current date/time display
+        function updateDateTime() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
             };
+            document.getElementById('current-datetime').textContent = 
+                now.toLocaleString('en-US', options);
+        }
+        
+        // Update immediately and then every second
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
 
-            // Add recurrence-specific fields
-            if (recurrenceType !== 'one_time') {
-                data.recurrence_time = document.getElementById('template-recurrence-time').value;
 
-                if (recurrenceType === 'weekly') {
-                    const selectedDays = [];
-                    document.querySelectorAll('.weekly-day:checked').forEach(cb => {
-                        selectedDays.push(cb.value);
-                    });
-                    data.recurrence_days = selectedDays.join(',');
-                }
+        function toggleTemplateRecurring() {
+            const isRecurring = document.getElementById('template-recurring').checked;
+            const options = document.getElementById('template-recurring-options');
+            options.classList.toggle('hidden', !isRecurring);
+            if (isRecurring) updateTemplateRecurringUI();
+        }
 
-                if (recurrenceType === 'monthly') {
-                    data.recurrence_day_of_month = parseInt(document.getElementById('template-day-of-month').value);
-                }
+        function updateTemplateRecurringUI() {
+            const type = document.getElementById('template-recurrence-type').value;
+            document.getElementById('template-weekly-options').classList.toggle('hidden', type !== 'weekly');
+            document.getElementById('template-monthly-options').classList.toggle('hidden', type !== 'monthly');
+        }
+
+        async function createTemplate() {
+            const name = document.getElementById('template-name').value;
+            const duration = parseInt(document.getElementById('template-duration').value) * 60;
+            const notes = document.getElementById('template-notes').value;
+            const isRecurring = document.getElementById('template-recurring').checked;
+
+            if (!name) {
+                alert('Please provide a template name');
+                return;
             }
 
-            // Determine if creating or updating
-            const url = isEditMode ? `/api/templates/update/${templateId}` : '/api/templates/create';
-            const method = isEditMode ? 'PUT' : 'POST';
+            let recurrencePattern = null;
+            if (isRecurring) {
+                const type = document.getElementById('template-recurrence-type').value;
+                const pattern = { type };
 
-            fetch(url, {
-                method: method,
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    showToast(isEditMode ? 'Template updated' : 'Template created');
-                    setTimeout(() => location.reload(), 1000);
+                if (type === 'weekly') {
+                    const days = Array.from(document.querySelectorAll('.template-weekday-check:checked'))
+                                     .map(cb => parseInt(cb.value));
+                    if (days.length === 0) {
+                        alert('Please select at least one day for weekly recurrence');
+                        return;
+                    }
+                    pattern.days = days;
+                } else if (type === 'monthly') {
+                    pattern.day = parseInt(document.getElementById('template-month-day').value);
+                }
+
+                recurrencePattern = JSON.stringify(pattern);
+            }
+
+            try {
+                const response = await fetch('/api/templates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        duration,
+                        recurrence_pattern: recurrencePattern,
+                        notes
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.error) {
+                    alert('Error: ' + result.error);
                 } else {
-                    showToast('Error: ' + result.message, 5000);
+                    alert('Template created successfully!');
+                    location.reload();
                 }
-            })
-            .catch(error => {
-                showToast('Error: ' + error.message, 5000);
-            });
-        });
-
-        // Edit template
-        function editTemplate(templateId) {
-            fetch(`/api/templates/get/${templateId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const template = data.template;
-
-                        isEditMode = true;
-                        document.getElementById('form-title').textContent = 'Edit Template';
-                        document.getElementById('template-id').value = template.id;
-                        document.getElementById('template-name').value = template.name;
-                        document.getElementById('template-duration').value = template.duration;
-                        document.getElementById('template-recurrence-type').value = template.recurrence_type || 'one_time';
-                        document.getElementById('template-description').value = template.description || '';
-
-                        if (template.recurrence_type && template.recurrence_type !== 'one_time') {
-                            document.getElementById('template-recurrence-time').value = template.recurrence_time || '09:00';
-
-                            if (template.recurrence_type === 'weekly' && template.recurrence_days) {
-                                const days = template.recurrence_days.split(',');
-                                document.querySelectorAll('.weekly-day').forEach(cb => {
-                                    cb.checked = days.includes(cb.value);
-                                });
-                            }
-
-                            if (template.recurrence_type === 'monthly' && template.recurrence_day_of_month) {
-                                document.getElementById('template-day-of-month').value = template.recurrence_day_of_month;
-                            }
-                        }
-
-                        document.getElementById('template-recurrence-type').dispatchEvent(new Event('change'));
-                        document.getElementById('cancel-btn').style.display = 'block';
-
-                        // Scroll to form
-                        document.getElementById('template-form').scrollIntoView({ behavior: 'smooth' });
-                    }
-                });
-        }
-
-        // Cancel edit
-        document.getElementById('cancel-btn').addEventListener('click', function() {
-            isEditMode = false;
-            document.getElementById('form-title').textContent = 'Create Template';
-            document.getElementById('template-form').reset();
-            document.getElementById('template-id').value = '';
-            this.style.display = 'none';
-            document.getElementById('template-recurrence-type').dispatchEvent(new Event('change'));
-        });
-
-        // Delete template
-        function deleteTemplate(templateId) {
-            if (confirm('Delete this template?')) {
-                fetch(`/api/templates/delete/${templateId}`, {
-                    method: 'DELETE'
-                })
-                .then(response => response.json())
-                .then(result => {
-                    if (result.success) {
-                        showToast('Template deleted');
-                        document.querySelector(`.template-item[data-template-id="${templateId}"]`).remove();
-                    } else {
-                        showToast('Error: ' + result.message, 5000);
-                    }
-                })
-                .catch(error => {
-                    showToast('Error: ' + error.message, 5000);
-                });
+            } catch (error) {
+                alert('Error creating template: ' + error);
             }
         }
 
-        // Attach event listeners
-        document.querySelectorAll('.edit-template-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const templateId = this.getAttribute('data-template-id');
-                editTemplate(templateId);
-            });
-        });
+        async function deleteTemplate(templateId) {
+            if (!confirm('Delete this template?')) return;
 
-        document.querySelectorAll('.delete-template-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const templateId = this.getAttribute('data-template-id');
-                deleteTemplate(templateId);
-            });
-        });
+            try {
+                const response = await fetch(`/api/templates/${templateId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                
+                if (result.error) {
+                    alert('Error: ' + result.error);
+                } else {
+                    document.getElementById(`template-card-${templateId}`).remove();
+                    
+                    // Check if any templates left
+                    const container = document.getElementById('templates-container');
+                    if (container.children.length === 0 || !container.querySelector('.border')) {
+                        location.reload();
+                    }
+                }
+            } catch (error) {
+                alert('Error deleting template: ' + error);
+            }
+        }
     </script>
 </body>
 </html>

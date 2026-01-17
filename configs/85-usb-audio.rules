@@ -1,0 +1,18 @@
+# udev rule to ensure Behringer UCA202 is always card 1
+# Install to: /etc/udev/rules.d/85-usb-audio.rules
+#
+# This prevents the UCA202 card number from changing if other
+# USB devices are connected/disconnected.
+
+# Behringer UCA202/UCA222 USB Audio Interface
+# Vendor ID: 08bb (Texas Instruments PCM2902)
+# Product ID: 29b0
+SUBSYSTEM=="sound", ATTR{id}=="U0x8bb0x29b0", ATTR{number}=="1"
+
+# Alternative: Match by USB port (more reliable if you always use same port)
+# Uncomment and adjust if needed:
+# SUBSYSTEM=="sound", KERNELS=="1-1.2", ATTR{number}=="1"
+
+# Reload udev rules after installation:
+# sudo udevadm control --reload-rules
+# sudo udevadm trigger

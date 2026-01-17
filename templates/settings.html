@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Recorder - Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Audio Recorder</h1>
+            <div class="space-x-4">
+                <a href="/" class="hover:underline">Dashboard</a>
+                <a href="/schedule" class="hover:underline">Schedule</a>
+                <a href="/calendar" class="hover:underline">Calendar</a>
+                <a href="/templates" class="hover:underline">Templates</a>
+                <a href="/recordings" class="hover:underline">Recordings</a>
+                <a href="/settings" class="hover:underline font-semibold">Settings</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-6">
+        <!-- Audio Device Configuration -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Audio Device Configuration</h2>
+            
+            <!-- Auto-detect option -->
+            <div class="mb-4">
+                <label class="flex items-center">
+                    <input type="radio" name="device-mode" value="auto" id="mode-auto" 
+                        checked class="mr-2" onchange="toggleDeviceMode()">
+                    <span class="text-gray-700 font-medium">Automatically detect audio device (Recommended)</span>
+                </label>
+                <p class="text-sm text-gray-500 mt-1 ml-6">
+                    System will automatically select USB audio device (Behringer UCA202)
+                </p>
+            </div>
+            
+            <div class="mb-4">
+                <label class="flex items-center">
+                    <input type="radio" name="device-mode" value="manual" id="mode-manual" 
+                        class="mr-2" onchange="toggleDeviceMode()">
+                    <span class="text-gray-700 font-medium">Manually select device</span>
+                </label>
+            </div>
+            
+            <!-- Manual device selection -->
+            <div id="manual-device-select" class="hidden ml-6 mb-4">
+                <label class="block text-gray-700 mb-2">Select Audio Device</label>
+                <select id="device-select" class="w-full md:w-1/2 border rounded px-3 py-2">
+                    <option value="">Loading devices...</option>
+                </select>
+                
+                <!-- Device info display -->
+                <div id="device-info" class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded hidden">
+                    <!-- Shows selected device details -->
+                </div>
+            </div>
+            
+            <!-- Currently Active Device Display -->
+            <div class="p-4 bg-green-50 border border-green-200 rounded mb-4">
+                <h3 class="font-semibold text-green-900 mb-2">Currently Active Device</h3>
+                <p class="text-sm text-green-800">
+                    <strong>Mode:</strong> <span id="current-mode">Auto-detect</span><br>
+                    <strong>Device:</strong> <span id="current-device">Loading...</span><br>
+                    <strong>Status:</strong> 
+                    <span id="device-status" class="text-green-600">● Checking...</span>
+                </p>
+            </div>
+            
+            <!-- Action buttons -->
+            <div class="flex space-x-3">
+                <button onclick="testAudioDevice()" 
+                    class="bg-green-500 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded">
+                    Test Selected Device (3 sec)
+                </button>
+                
+                <button onclick="saveAudioConfig()" 
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded">
+                    Save Configuration
+                </button>
+                
+                <button onclick="refreshDevices()" 
+                    class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-4 py-2 rounded">
+                    Refresh Devices
+                </button>
+            </div>
+        </div>
+
+        <!-- Recording Filename Configuration -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Recording Filename Configuration</h2>
+            
+            <p class="text-sm text-gray-600 mb-4">
+                Recording files use the format: <code class="bg-gray-100 px-2 py-1 rounded">YYYY_MMM_DD_HH:MM_[SUFFIX].wav</code>
+            </p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-gray-700 mb-2">Left Channel Suffix</label>
+                    <input type="text" id="left-suffix" value="L" maxlength="10"
+                        class="w-full border border-gray-300 rounded px-3 py-2" 
+                        placeholder="e.g., L, Left, Ch1">
+                    <p class="text-xs text-gray-500 mt-1">Default: L</p>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 mb-2">Right Channel Suffix</label>
+                    <input type="text" id="right-suffix" value="R" maxlength="10"
+                        class="w-full border border-gray-300 rounded px-3 py-2"
+                        placeholder="e.g., R, Right, Ch2">
+                    <p class="text-xs text-gray-500 mt-1">Default: R</p>
+                </div>
+            </div>
+            
+            <!-- Preview -->
+            <div class="p-4 bg-blue-50 border border-blue-200 rounded mb-4">
+                <h3 class="font-semibold text-blue-900 mb-2">Filename Preview</h3>
+                <p class="text-sm text-blue-800 font-mono">
+                    <span id="filename-preview-left">2026_Jan_17_14:30_L.wav</span><br>
+                    <span id="filename-preview-right">2026_Jan_17_14:30_R.wav</span>
+                </p>
+            </div>
+            
+            <button onclick="saveFilenameConfig()" 
+                class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded">
+                Save Filename Configuration
+            </button>
+        </div>
+
+        <!-- Backup & Restore -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Backup & Restore</h2>
+            
+            <!-- Export Section -->
+            <div class="mb-6">
+                <h3 class="font-semibold text-gray-700 mb-3">Export / Backup</h3>
+                <div class="flex flex-wrap gap-3">
+                    <button onclick="exportSchedules()" 
+                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                        Export Schedules & Templates (.sched)
+                    </button>
+                    <button onclick="exportConfig()" 
+                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                        Export System Configuration (.conf)
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Restore Schedules -->
+            <div class="mb-6 border-t pt-4">
+                <h3 class="font-semibold text-gray-700 mb-3">Restore Schedules & Templates</h3>
+                <p class="text-sm text-gray-600 mb-3">
+                    Upload a .sched file to restore schedules and templates.
+                    <span class="text-red-600 font-semibold">Warning: This will overwrite all current schedules!</span>
+                </p>
+                <div class="flex items-center gap-3">
+                    <input type="file" id="schedules-file" accept=".sched" 
+                        class="border rounded px-3 py-2">
+                    <button onclick="importSchedules()" 
+                        class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded">
+                        Restore Schedules
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Restore Configuration -->
+            <div class="mb-6 border-t pt-4">
+                <h3 class="font-semibold text-gray-700 mb-3">Restore System Configuration</h3>
+                <p class="text-sm text-gray-600 mb-3">
+                    Upload a .conf file to restore system configuration.
+                    <span class="text-red-600 font-semibold">Warning: This will overwrite all current settings!</span>
+                </p>
+                <div class="flex items-center gap-3">
+                    <input type="file" id="config-file" accept=".conf" 
+                        class="border rounded px-3 py-2">
+                    <button onclick="importConfig()" 
+                        class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded">
+                        Restore Configuration
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Quick Revert -->
+            <div class="border-t pt-4">
+                <h3 class="font-semibold text-gray-700 mb-3">Quick Revert (Undo Last Restore)</h3>
+                <p class="text-sm text-gray-600 mb-3">
+                    Quickly restore to the state before your last import.
+                </p>
+                <div class="flex gap-3">
+                    <button id="revert-schedules-btn" onclick="revertSchedules()" disabled
+                        class="bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed disabled:opacity-50">
+                        Revert to Last Schedules
+                    </button>
+                    <button id="revert-config-btn" onclick="revertConfig()" disabled
+                        class="bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed disabled:opacity-50">
+                        Revert to Last Configuration
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">
+                    Revert buttons are enabled after importing backups
+                </p>
+            </div>
+        </div>
+
+        <!-- Log Viewer -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">System Logs</h2>
+                <div class="flex space-x-2">
+                    <select id="log-type" onchange="loadLogs()" class="border rounded px-3 py-2">
+                        <option value="app">Application Log</option>
+                        <option value="error">Error Log</option>
+                    </select>
+                    <select id="log-lines" onchange="loadLogs()" class="border rounded px-3 py-2">
+                        <option value="50">Last 50 lines</option>
+                        <option value="100" selected>Last 100 lines</option>
+                        <option value="200">Last 200 lines</option>
+                        <option value="500">Last 500 lines</option>
+                    </select>
+                    <button onclick="loadLogs()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            
+            <div id="log-container" class="bg-gray-900 text-green-400 font-mono text-xs p-4 rounded overflow-auto" 
+                 style="max-height: 500px;">
+                <div class="text-gray-500">Loading logs...</div>
+            </div>
+            
+            <div class="mt-2 text-sm text-gray-600">
+                <span id="log-info">Showing last 100 lines</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let availableDevices = [];
+
+        // Load on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadCurrentConfig();
+            loadDevices();
+            loadLogs();
+        });
+
+        async function loadCurrentConfig() {
+            try {
+                const response = await fetch('/api/audio/config');
+                const data = await response.json();
+                
+                // Update display
+                const mode = data.current_device === 'auto' ? 'Auto-detect' : 'Manual';
+                document.getElementById('current-mode').textContent = mode;
+                document.getElementById('current-device').textContent = data.actual_device;
+                
+                if (data.device_info) {
+                    document.getElementById('current-device').textContent = 
+                        `${data.device_info.name} (${data.actual_device})`;
+                    document.getElementById('device-status').innerHTML = 
+                        '<span class="text-green-600">● Connected</span>';
+                } else {
+                    document.getElementById('device-status').innerHTML = 
+                        '<span class="text-red-600">● Not Found</span>';
+                }
+                
+                // Set radio buttons
+                if (data.current_device === 'auto') {
+                    document.getElementById('mode-auto').checked = true;
+                } else {
+                    document.getElementById('mode-manual').checked = true;
+                    toggleDeviceMode();
+                }
+            } catch (error) {
+                console.error('Error loading config:', error);
+            }
+        }
+
+        async function loadDevices() {
+            try {
+                const response = await fetch('/api/audio/devices');
+                const data = await response.json();
+                availableDevices = data.devices;
+                
+                const select = document.getElementById('device-select');
+                select.innerHTML = '';
+                
+                if (data.devices.length === 0) {
+                    select.innerHTML = '<option value="">No devices found</option>';
+                    return;
+                }
+                
+                data.devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.alsa_id;
+                    option.textContent = `${device.name} (${device.alsa_id})`;
+                    if (device.is_recommended) {
+                        option.textContent += ' ⭐ Recommended';
+                    }
+                    if (device.alsa_id === data.actual_device) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+                
+                // Update device info when selection changes
+                select.addEventListener('change', updateDeviceInfo);
+                updateDeviceInfo();
+                
+            } catch (error) {
+                console.error('Error loading devices:', error);
+            }
+        }
+
+        function toggleDeviceMode() {
+            const manualMode = document.getElementById('mode-manual').checked;
+            const manualSelect = document.getElementById('manual-device-select');
+            manualSelect.classList.toggle('hidden', !manualMode);
+        }
+
+        function updateDeviceInfo() {
+            const select = document.getElementById('device-select');
+            const selectedId = select.value;
+            const device = availableDevices.find(d => d.alsa_id === selectedId);
+            const infoDiv = document.getElementById('device-info');
+            
+            if (device) {
+                infoDiv.classList.remove('hidden');
+                infoDiv.innerHTML = `
+                    <p class="text-sm"><strong>Device:</strong> ${device.name}</p>
+                    <p class="text-sm"><strong>Description:</strong> ${device.description}</p>
+                    <p class="text-sm"><strong>ALSA ID:</strong> ${device.alsa_id}</p>
+                    <p class="text-sm"><strong>Card:</strong> ${device.card}, <strong>Device:</strong> ${device.device}</p>
+                    ${device.is_recommended ? '<p class="text-sm text-blue-600">⭐ Recommended for this system</p>' : ''}
+                `;
+            } else {
+                infoDiv.classList.add('hidden');
+            }
+        }
+
+        async function testAudioDevice() {
+            const autoMode = document.getElementById('mode-auto').checked;
+            const device = autoMode ? 'auto' : document.getElementById('device-select').value;
+            
+            if (!autoMode && !device) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = 'Testing... (3 sec)';
+            
+            try {
+                const response = await fetch('/api/audio/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device, duration: 3 })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`✓ Audio test successful!\n\nDevice: ${result.device}\nFile size: ${result.file_size_mb} MB`);
+                } else {
+                    alert(`✗ Audio test failed:\n\n${result.error}`);
+                }
+            } catch (error) {
+                alert('Error testing device: ' + error);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Test Selected Device (3 sec)';
+            }
+        }
+
+        async function saveAudioConfig() {
+            const autoMode = document.getElementById('mode-auto').checked;
+            const device = autoMode ? 'auto' : document.getElementById('device-select').value;
+            
+            if (!autoMode && !device) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/audio/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✓ Configuration saved successfully!\n\nChanges will take effect for new recordings.');
+                    loadCurrentConfig();
+                } else {
+                    alert('✗ Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error saving configuration: ' + error);
+            }
+        }
+
+        function refreshDevices() {
+            loadDevices();
+            loadCurrentConfig();
+        }
+
+        async function loadLogs() {
+            const logType = document.getElementById('log-type').value;
+            const lines = document.getElementById('log-lines').value;
+            
+            try {
+                const response = await fetch(`/api/logs?type=${logType}&lines=${lines}`);
+                const data = await response.json();
+                
+                const container = document.getElementById('log-container');
+                
+                if (data.logs && data.logs.length > 0) {
+                    container.innerHTML = data.logs.map(line => 
+                        `<div>${escapeHtml(line)}</div>`
+                    ).join('');
+                    
+                    // Scroll to bottom
+                    container.scrollTop = container.scrollHeight;
+                    
+                    document.getElementById('log-info').textContent = 
+                        `Showing ${data.showing_lines} of ${data.total_lines} total lines`;
+                } else {
+                    container.innerHTML = '<div class="text-gray-500">No logs available</div>';
+                    document.getElementById('log-info').textContent = 'No logs found';
+                }
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                document.getElementById('log-container').innerHTML = 
+                    '<div class="text-red-500">Error loading logs</div>';
+            }
+        }
+
+        // Filename Configuration Functions
+        async function loadFilenameConfig() {
+            try {
+                const response = await fetch('/api/config/filename');
+                const data = await response.json();
+                
+                document.getElementById('left-suffix').value = data.left_suffix || 'L';
+                document.getElementById('right-suffix').value = data.right_suffix || 'R';
+                
+                updateFilenamePreview();
+            } catch (error) {
+                console.error('Error loading filename config:', error);
+            }
+        }
+
+        function updateFilenamePreview() {
+            const now = new Date();
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const year = now.getFullYear();
+            const month = months[now.getMonth()];
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            const leftSuffix = document.getElementById('left-suffix').value || 'L';
+            const rightSuffix = document.getElementById('right-suffix').value || 'R';
+            
+            document.getElementById('filename-preview-left').textContent = 
+                `${year}_${month}_${day}_${hours}:${minutes}_${leftSuffix}.wav`;
+            document.getElementById('filename-preview-right').textContent = 
+                `${year}_${month}_${day}_${hours}:${minutes}_${rightSuffix}.wav`;
+        }
+
+        // Update preview on input
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFilenameConfig();
+            document.getElementById('left-suffix').addEventListener('input', updateFilenamePreview);
+            document.getElementById('right-suffix').addEventListener('input', updateFilenamePreview);
+        });
+
+        async function saveFilenameConfig() {
+            const leftSuffix = document.getElementById('left-suffix').value.trim();
+            const rightSuffix = document.getElementById('right-suffix').value.trim();
+            
+            if (!leftSuffix || !rightSuffix) {
+                alert('Both channel suffixes are required');
+                return;
+            }
+            
+            if (leftSuffix === rightSuffix) {
+                if (!confirm('Warning: Left and right channel suffixes are the same. This may cause confusion. Continue anyway?')) {
+                    return;
+                }
+            }
+            
+            try {
+                const response = await fetch('/api/config/filename', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        left_suffix: leftSuffix,
+                        right_suffix: rightSuffix
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Filename configuration saved successfully!');
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error saving filename configuration: ' + error);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Backup/Restore Functions
+        async function checkRevertAvailable() {
+            try {
+                const response = await fetch('/api/revert/available');
+                const data = await response.json();
+                
+                const schedulesBtn = document.getElementById('revert-schedules-btn');
+                const configBtn = document.getElementById('revert-config-btn');
+                
+                if (data.schedules_available) {
+                    schedulesBtn.disabled = false;
+                    schedulesBtn.className = 'bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded cursor-pointer';
+                }
+                
+                if (data.config_available) {
+                    configBtn.disabled = false;
+                    configBtn.className = 'bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded cursor-pointer';
+                }
+            } catch (error) {
+                console.error('Error checking revert availability:', error);
+            }
+        }
+
+        // Check revert availability on page load
+        checkRevertAvailable();
+
+        function exportSchedules() {
+            window.location.href = '/api/export/schedules';
+        }
+
+        function exportConfig() {
+            window.location.href = '/api/export/config';
+        }
+
+        async function importSchedules() {
+            const fileInput = document.getElementById('schedules-file');
+            if (!fileInput.files.length) {
+                alert('Please select a .sched file first');
+                return;
+            }
+            
+            if (!confirm('WARNING: This will overwrite all current schedules and templates!\n\nCurrent data will be backed up automatically.\n\nAre you sure you want to continue?')) {
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/api/import/schedules', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✓ Schedules imported successfully!\n\nPrevious schedules backed up. Use Revert button if needed.');
+                    fileInput.value = '';
+                    checkRevertAvailable();
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error importing schedules: ' + error);
+            }
+        }
+
+        async function importConfig() {
+            const fileInput = document.getElementById('config-file');
+            if (!fileInput.files.length) {
+                alert('Please select a .conf file first');
+                return;
+            }
+            
+            if (!confirm('WARNING: This will overwrite all current configuration!\n\nCurrent configuration will be backed up automatically.\n\nAre you sure you want to continue?')) {
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/api/import/config', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✓ Configuration imported successfully!\n\nPrevious configuration backed up. Use Revert button if needed.');
+                    fileInput.value = '';
+                    checkRevertAvailable();
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error importing configuration: ' + error);
+            }
+        }
+
+        async function revertSchedules() {
+            if (!confirm('Revert to previous schedules?\n\nThis will restore schedules from before your last import.\n\nCurrent schedules will be lost!')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/revert/schedules', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✓ Reverted to previous schedules!');
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error reverting: ' + error);
+            }
+        }
+
+        async function revertConfig() {
+            if (!confirm('Revert to previous configuration?\n\nThis will restore configuration from before your last import.\n\nCurrent configuration will be lost!')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/revert/config', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✓ Reverted to previous configuration!');
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error reverting: ' + error);
+            }
+        }
+
+        // Auto-refresh logs every 5 seconds
+        setInterval(loadLogs, 5000);
+    </script>
+</body>
+</html>

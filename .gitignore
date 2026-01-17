@@ -6,27 +6,11 @@ __pycache__/
 .Python
 env/
 venv/
+ENV/
 *.egg-info/
 dist/
 build/
-
-# SQLite databases
-*.db
-*.db-journal
-*.db.meta
-
-# Logs
-*.log
-logs/
-
-# Data directory
-data/
-
-# Recordings (don't commit audio files)
-recordings/
-*.wav
-*.mp3
-*.flac
+*.egg
 
 # IDE
 .vscode/
@@ -34,15 +18,52 @@ recordings/
 *.swp
 *.swo
 *~
+.project
+.pydevproject
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Environment
-.env
-.env.local
+# Project specific - Runtime data
+*.log
+*.db
+recordings/
+*.wav
+.audio-archiver/
+backups/
+
+# Project specific - Keep example configs
+!configs/*.conf
+!configs/*.rules
 
 # Temporary files
-test.wav
+*.tmp
+*.bak
+*.backup
 test_*.wav
+test_*.sched
+test_*.conf
+
+# Sensitive data
+*.key
+*.pem
+config.local.*
+secrets.py
+.env
+
+# Distribution
+*.tar.gz
+*.zip
+audio-archiver-v*.tar.gz
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation builds
+docs/_build/
+site/

@@ -1,0 +1,31 @@
+[Unit]
+Description=Audio Recorder - Dual-Mono Recording System
+After=network.target sound.target
+Wants=network.target
+
+[Service]
+Type=simple
+# IMPORTANT: Replace 'pi' with your actual username if different
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/audio-recorder
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/python3 /home/pi/audio-recorder/app.py
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=append:/var/log/audio-recorder/app.log
+StandardError=append:/var/log/audio-recorder/error.log
+
+# Security settings (optional but recommended)
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

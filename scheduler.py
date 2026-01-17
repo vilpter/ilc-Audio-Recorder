@@ -1,407 +1,373 @@
 #!/usr/bin/env python3
 """
 Scheduler Module
-Handles scheduled recordings using APScheduler with SQLite persistence
+Manages scheduled recordings using SQLite and APScheduler
 """
 
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.date import DateTrigger
-from datetime import datetime, timedelta
-import logging
 import sqlite3
 from pathlib import Path
+from datetime import datetime, timedelta
+import json
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.cron import CronTrigger
+import recorder
+import atexit
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Database setup
+DB_PATH = Path.home() / '.audio-recorder' / 'schedule.db'
+DB_PATH.parent.mkdir(exist_ok=True)
+
+# Initialize scheduler
+scheduler = BackgroundScheduler()
+scheduler.start()
+
+# Ensure scheduler shuts down cleanly
+atexit.register(lambda: scheduler.shutdown())
 
 
-class RecordingScheduler:
-    """Manages scheduled recording jobs using APScheduler"""
-
-    def __init__(self, db_path="scheduler.db", recorder=None):
-        """
-        Initialize the scheduler
-
-        Args:
-            db_path: Path to SQLite database for job persistence
-            recorder: AudioRecorder instance for executing recordings
-        """
-        self.db_path = Path(db_path)
-        self.recorder = recorder
-
-        # Configure job store
-        jobstores = {
-            'default': SQLAlchemyJobStore(url=f'sqlite:///{self.db_path}')
-        }
-
-        # Create scheduler
-        self.scheduler = BackgroundScheduler(
-            jobstores=jobstores,
-            job_defaults={'coalesce': False, 'max_instances': 1}
+def init_database():
+    """Initialize SQLite database for schedule storage"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS scheduled_jobs (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            duration INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            completed_at TEXT,
+            notes TEXT,
+            is_recurring INTEGER DEFAULT 0,
+            recurrence_pattern TEXT,
+            parent_template_id TEXT,
+            allow_override INTEGER DEFAULT 0
         )
+    ''')
+    
+    # System configuration table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS system_config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    ''')
+    
+    # Set default audio device to auto-detect
+    cursor.execute('''
+        INSERT OR IGNORE INTO system_config (key, value, updated_at) 
+        VALUES ('audio_device', 'auto', datetime('now'))
+    ''')
+    
+    # Set default channel suffixes
+    cursor.execute('''
+        INSERT OR IGNORE INTO system_config (key, value, updated_at) 
+        VALUES ('channel_left_suffix', 'L', datetime('now'))
+    ''')
+    
+    cursor.execute('''
+        INSERT OR IGNORE INTO system_config (key, value, updated_at) 
+        VALUES ('channel_right_suffix', 'R', datetime('now'))
+    ''')
+    
+    conn.commit()
+    conn.close()
 
-        # Initialize metadata database
-        self._init_metadata_db()
 
-    def _init_metadata_db(self):
-        """Initialize metadata database for job information"""
-        conn = sqlite3.connect(f"{self.db_path}.meta")
+def create_job(start_time, duration, name='Unnamed Recording', notes='', 
+               is_recurring=False, recurrence_pattern=None, template_id=None, allow_override=False):
+    """
+    Create a new scheduled recording job
+    
+    Args:
+        start_time: ISO format datetime string (e.g., '2024-01-15T14:30:00')
+        duration: Recording duration in seconds
+        name: Human-readable job name
+        notes: Optional notes about the recording
+        is_recurring: Whether this is a recurring schedule
+        recurrence_pattern: JSON string with recurrence settings
+        template_id: ID of template this job was created from (optional)
+        allow_override: Allow duration longer than default limit
+    
+    Returns:
+        Job ID
+    """
+    # Parse start time
+    dt = datetime.fromisoformat(start_time)
+    job_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    
+    # Store in database
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO scheduled_jobs 
+        (id, name, start_time, duration, created_at, notes, is_recurring, 
+         recurrence_pattern, parent_template_id, allow_override)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (job_id, name, start_time, duration, datetime.now().isoformat(), 
+          notes, 1 if is_recurring else 0, recurrence_pattern, template_id, 1 if allow_override else 0))
+    
+    conn.commit()
+    conn.close()
+    
+    # Schedule with APScheduler
+    if is_recurring and recurrence_pattern:
+        # Parse recurrence pattern and create cron trigger
+        pattern = json.loads(recurrence_pattern)
+        trigger = _create_cron_trigger(pattern, dt.time())
+    else:
+        # One-time job
+        trigger = DateTrigger(run_date=dt)
+    
+    scheduler.add_job(
+        func=_execute_scheduled_recording,
+        trigger=trigger,
+        id=job_id,
+        args=[job_id, duration, allow_override],
+        replace_existing=True
+    )
+    
+    return job_id
+
+
+def _create_cron_trigger(pattern, time_of_day):
+    """
+    Create a CronTrigger from recurrence pattern
+    
+    Pattern examples:
+    - {"type": "daily", "time": "09:00"}
+    - {"type": "weekly", "days": [1,2,3,4,5], "time": "09:00"}  # Mon-Fri
+    - {"type": "monthly", "day": 1, "time": "09:00"}  # 1st of month
+    
+    Args:
+        pattern: Dictionary with recurrence settings
+        time_of_day: datetime.time object for scheduled time
+    
+    Returns:
+        CronTrigger object
+    """
+    hour = time_of_day.hour
+    minute = time_of_day.minute
+    
+    if pattern['type'] == 'daily':
+        return CronTrigger(hour=hour, minute=minute)
+    
+    elif pattern['type'] == 'weekly':
+        # days: list of 0-6 (Monday=0, Sunday=6)
+        days_str = ','.join(str(d) for d in pattern.get('days', [0]))
+        return CronTrigger(day_of_week=days_str, hour=hour, minute=minute)
+    
+    elif pattern['type'] == 'monthly':
+        # day: 1-31
+        return CronTrigger(day=pattern.get('day', 1), hour=hour, minute=minute)
+    
+    else:
+        # Default to one-time (shouldn't reach here)
+        return DateTrigger(run_date=datetime.now())
+
+
+def delete_job(job_id):
+    """
+    Delete a scheduled job
+    
+    Args:
+        job_id: Job identifier
+    """
+    # Remove from scheduler
+    try:
+        scheduler.remove_job(job_id)
+    except:
+        pass  # Job may have already completed
+    
+    # Remove from database
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM scheduled_jobs WHERE id = ?', (job_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_all_jobs():
+    """
+    Retrieve all scheduled jobs
+    
+    Returns:
+        List of job dictionaries
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT * FROM scheduled_jobs 
+        ORDER BY start_time DESC
+    ''')
+    
+    jobs = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return jobs
+
+
+def get_pending_jobs():
+    """Get only pending (not yet executed) jobs"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT * FROM scheduled_jobs 
+        WHERE status = 'pending' AND start_time > ?
+        ORDER BY start_time
+    ''', (datetime.now().isoformat(),))
+    
+    jobs = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return jobs
+
+
+def _execute_scheduled_recording(job_id, duration, allow_override=False):
+    """
+    Internal function executed by APScheduler to start recording
+    
+    Args:
+        job_id: Job identifier
+        duration: Recording duration in seconds
+        allow_override: Allow duration longer than default limit
+    """
+    print(f"Executing scheduled job: {job_id}")
+    
+    try:
+        # Start recording with override flag
+        recorder.start_capture(duration, allow_override=allow_override)
+        
+        # Update database status
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-
-        # Create jobs metadata table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS job_metadata (
-                job_id TEXT PRIMARY KEY,
-                name TEXT,
-                duration INTEGER,
-                recurrence_type TEXT,
-                recurrence_pattern TEXT,
-                template_id TEXT,
-                created_at TEXT,
-                notes TEXT
-            )
-        """)
-
+        cursor.execute('''
+            UPDATE scheduled_jobs 
+            SET status = 'completed', completed_at = ?
+            WHERE id = ?
+        ''', (datetime.now().isoformat(), job_id))
+        conn.commit()
+        conn.close()
+        
+        print(f"Job {job_id} completed successfully")
+        
+    except Exception as e:
+        print(f"Job {job_id} failed: {e}")
+        
+        # Update database with error status
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE scheduled_jobs 
+            SET status = 'failed', completed_at = ?, notes = ?
+            WHERE id = ?
+        ''', (datetime.now().isoformat(), str(e), job_id))
         conn.commit()
         conn.close()
 
-    def start(self):
-        """Start the scheduler"""
-        if not self.scheduler.running:
-            self.scheduler.start()
-            logger.info("Scheduler started")
 
-    def shutdown(self):
-        """Shutdown the scheduler"""
-        if self.scheduler.running:
-            self.scheduler.shutdown()
-            logger.info("Scheduler stopped")
-
-    def _execute_recording(self, job_id, duration, name):
-        """
-        Internal method to execute a scheduled recording
-
-        Args:
-            job_id: Job identifier
-            duration: Recording duration in seconds
-            name: Recording name/prefix
-        """
-        logger.info(f"Executing scheduled job: {job_id} - {name} ({duration}s)")
-
-        if self.recorder:
-            success, message, session = self.recorder.start_recording(
-                duration_seconds=duration,
-                name_prefix=name,
-                allow_long_recording=True  # Scheduled jobs can override limit
-            )
-
-            if success:
-                logger.info(f"Scheduled recording started: {name}")
-            else:
-                logger.error(f"Failed to start scheduled recording: {message}")
-        else:
-            logger.error("No recorder instance available")
-
-    def add_one_time_job(self, start_datetime, duration, name, notes=""):
-        """
-        Schedule a one-time recording
-
-        Args:
-            start_datetime: datetime object for when to start
-            duration: Recording duration in seconds
-            name: Recording name/prefix
-            notes: Optional notes
-
-        Returns:
-            tuple: (success: bool, job_id: str or None, message: str)
-        """
-        try:
-            # Create job
-            job = self.scheduler.add_job(
-                func=self._execute_recording,
-                trigger=DateTrigger(run_date=start_datetime),
-                args=[None, duration, name],  # job_id will be set after creation
-                name=name,
-                id=None  # Let APScheduler generate ID
-            )
-
-            # Update job_id in args
-            job.modify(args=[job.id, duration, name])
-
-            # Save metadata
-            self._save_job_metadata(
-                job_id=job.id,
-                name=name,
-                duration=duration,
-                recurrence_type='one_time',
-                recurrence_pattern=start_datetime.isoformat(),
-                notes=notes
-            )
-
-            logger.info(f"One-time job scheduled: {job.id} at {start_datetime}")
-            return (True, job.id, "Job scheduled successfully")
-
-        except Exception as e:
-            logger.error(f"Failed to schedule job: {e}")
-            return (False, None, str(e))
-
-    def add_recurring_job(self, recurrence_type, start_time, duration, name,
-                         days_of_week=None, day_of_month=None, notes=""):
-        """
-        Schedule a recurring recording
-
-        Args:
-            recurrence_type: 'daily', 'weekly', 'monthly', 'weekdays', 'weekends'
-            start_time: Time string (HH:MM format)
-            duration: Recording duration in seconds
-            name: Recording name/prefix
-            days_of_week: List of day numbers (0=Monday, 6=Sunday) for weekly
-            day_of_month: Day number (1-31) for monthly
-            notes: Optional notes
-
-        Returns:
-            tuple: (success: bool, job_id: str or None, message: str)
-        """
-        try:
-            hour, minute = map(int, start_time.split(':'))
-
-            # Build cron trigger based on recurrence type
-            if recurrence_type == 'daily':
-                trigger = CronTrigger(hour=hour, minute=minute)
-                pattern = f"Daily at {start_time}"
-
-            elif recurrence_type == 'weekdays':
-                trigger = CronTrigger(day_of_week='mon-fri', hour=hour, minute=minute)
-                pattern = f"Weekdays at {start_time}"
-
-            elif recurrence_type == 'weekends':
-                trigger = CronTrigger(day_of_week='sat,sun', hour=hour, minute=minute)
-                pattern = f"Weekends at {start_time}"
-
-            elif recurrence_type == 'weekly' and days_of_week:
-                # Convert list [0, 2, 4] to 'mon,wed,fri'
-                day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-                days_str = ','.join([day_names[d] for d in days_of_week])
-                trigger = CronTrigger(day_of_week=days_str, hour=hour, minute=minute)
-                pattern = f"Weekly on {days_str} at {start_time}"
-
-            elif recurrence_type == 'monthly' and day_of_month:
-                trigger = CronTrigger(day=day_of_month, hour=hour, minute=minute)
-                pattern = f"Monthly on day {day_of_month} at {start_time}"
-
-            else:
-                return (False, None, "Invalid recurrence type or missing parameters")
-
-            # Create job
-            job = self.scheduler.add_job(
-                func=self._execute_recording,
+def restore_jobs_on_startup():
+    """
+    Restore pending jobs from database after system restart
+    Should be called when the application starts
+    """
+    jobs = get_pending_jobs()
+    
+    for job in jobs:
+        start_time = datetime.fromisoformat(job['start_time'])
+        
+        # Handle recurring jobs
+        if job.get('is_recurring') and job.get('recurrence_pattern'):
+            pattern = json.loads(job['recurrence_pattern'])
+            trigger = _create_cron_trigger(pattern, start_time.time())
+            
+            scheduler.add_job(
+                func=_execute_scheduled_recording,
                 trigger=trigger,
-                args=[None, duration, name],
-                name=name,
-                id=None
+                id=job['id'],
+                args=[job['id'], job['duration'], bool(job.get('allow_override', 0))],
+                replace_existing=True
             )
-
-            # Update job_id in args
-            job.modify(args=[job.id, duration, name])
-
-            # Save metadata
-            self._save_job_metadata(
-                job_id=job.id,
-                name=name,
-                duration=duration,
-                recurrence_type=recurrence_type,
-                recurrence_pattern=pattern,
-                notes=notes
+            print(f"Restored recurring job: {job['id']} - {pattern['type']}")
+        
+        # Handle one-time jobs
+        elif start_time > datetime.now():
+            scheduler.add_job(
+                func=_execute_scheduled_recording,
+                trigger=DateTrigger(run_date=start_time),
+                id=job['id'],
+                args=[job['id'], job['duration'], bool(job.get('allow_override', 0))],
+                replace_existing=True
             )
-
-            logger.info(f"Recurring job scheduled: {job.id} - {pattern}")
-            return (True, job.id, f"Recurring job scheduled: {pattern}")
-
-        except Exception as e:
-            logger.error(f"Failed to schedule recurring job: {e}")
-            return (False, None, str(e))
-
-    def remove_job(self, job_id):
-        """
-        Remove a scheduled job
-
-        Args:
-            job_id: Job identifier
-
-        Returns:
-            tuple: (success: bool, message: str)
-        """
-        try:
-            self.scheduler.remove_job(job_id)
-            self._delete_job_metadata(job_id)
-            logger.info(f"Job removed: {job_id}")
-            return (True, "Job removed successfully")
-        except Exception as e:
-            logger.error(f"Failed to remove job {job_id}: {e}")
-            return (False, str(e))
-
-    def get_all_jobs(self):
-        """
-        Get all scheduled jobs with metadata
-
-        Returns:
-            list: List of job dictionaries
-        """
-        jobs = []
-
-        try:
-            # Get jobs from scheduler
-            scheduled_jobs = self.scheduler.get_jobs()
-
-            # Get metadata
-            conn = sqlite3.connect(f"{self.db_path}.meta")
+            print(f"Restored scheduled job: {job['id']} at {start_time}")
+        else:
+            # Mark one-time jobs as missed if past due
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
-
-            for job in scheduled_jobs:
-                cursor.execute(
-                    "SELECT * FROM job_metadata WHERE job_id = ?",
-                    (job.id,)
-                )
-                metadata = cursor.fetchone()
-
-                next_run = job.next_run_time.isoformat() if job.next_run_time else None
-
-                job_info = {
-                    'id': job.id,
-                    'name': job.name,
-                    'next_run': next_run,
-                    'next_run_formatted': job.next_run_time.strftime("%Y-%m-%d %H:%M:%S") if job.next_run_time else "N/A"
-                }
-
-                # Add metadata if available
-                if metadata:
-                    job_info.update({
-                        'duration': metadata[2],
-                        'recurrence_type': metadata[3],
-                        'recurrence_pattern': metadata[4],
-                        'template_id': metadata[5],
-                        'created_at': metadata[6],
-                        'notes': metadata[7]
-                    })
-
-                jobs.append(job_info)
-
-            conn.close()
-
-        except Exception as e:
-            logger.error(f"Error getting jobs: {e}")
-
-        return jobs
-
-    def get_jobs_for_calendar(self, start_date, end_date):
-        """
-        Get all job occurrences within a date range for calendar display
-
-        Args:
-            start_date: Start date (datetime)
-            end_date: End date (datetime)
-
-        Returns:
-            list: List of job occurrence dictionaries
-        """
-        occurrences = []
-
-        try:
-            jobs = self.get_all_jobs()
-
-            for job in jobs:
-                apscheduler_job = self.scheduler.get_job(job['id'])
-                if not apscheduler_job:
-                    continue
-
-                # For one-time jobs
-                if job.get('recurrence_type') == 'one_time':
-                    next_run = apscheduler_job.next_run_time
-                    if next_run and start_date <= next_run <= end_date:
-                        occurrences.append({
-                            'job_id': job['id'],
-                            'name': job['name'],
-                            'start': next_run.isoformat(),
-                            'duration': job.get('duration', 0),
-                            'type': 'one_time',
-                            'pattern': job.get('recurrence_pattern', '')
-                        })
-
-                # For recurring jobs, calculate occurrences
-                else:
-                    trigger = apscheduler_job.trigger
-                    current = start_date
-
-                    # Generate up to 100 occurrences within range
-                    count = 0
-                    while current <= end_date and count < 100:
-                        next_fire = trigger.get_next_fire_time(None, current)
-                        if next_fire and next_fire <= end_date:
-                            occurrences.append({
-                                'job_id': job['id'],
-                                'name': job['name'],
-                                'start': next_fire.isoformat(),
-                                'duration': job.get('duration', 0),
-                                'type': job.get('recurrence_type', 'recurring'),
-                                'pattern': job.get('recurrence_pattern', '')
-                            })
-                            current = next_fire + timedelta(seconds=1)
-                            count += 1
-                        else:
-                            break
-
-        except Exception as e:
-            logger.error(f"Error generating calendar occurrences: {e}")
-
-        return occurrences
-
-    def _save_job_metadata(self, job_id, name, duration, recurrence_type,
-                          recurrence_pattern, template_id=None, notes=""):
-        """Save job metadata to database"""
-        try:
-            conn = sqlite3.connect(f"{self.db_path}.meta")
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                INSERT OR REPLACE INTO job_metadata
-                (job_id, name, duration, recurrence_type, recurrence_pattern,
-                 template_id, created_at, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                job_id, name, duration, recurrence_type, recurrence_pattern,
-                template_id, datetime.now().isoformat(), notes
-            ))
-
+            cursor.execute('''
+                UPDATE scheduled_jobs 
+                SET status = 'missed'
+                WHERE id = ?
+            ''', (job['id'],))
             conn.commit()
             conn.close()
-        except Exception as e:
-            logger.error(f"Error saving job metadata: {e}")
-
-    def _delete_job_metadata(self, job_id):
-        """Delete job metadata from database"""
-        try:
-            conn = sqlite3.connect(f"{self.db_path}.meta")
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM job_metadata WHERE job_id = ?", (job_id,))
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            logger.error(f"Error deleting job metadata: {e}")
+            print(f"Marked job as missed: {job['id']}")
 
 
-# Singleton instance
-_scheduler_instance = None
+def get_system_config(key, default=None):
+    """Get system configuration value"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT value FROM system_config WHERE key = ?', (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else default
 
-def get_scheduler(db_path="scheduler.db", recorder=None):
-    """Get or create the singleton scheduler instance"""
-    global _scheduler_instance
-    if _scheduler_instance is None:
-        _scheduler_instance = RecordingScheduler(db_path, recorder)
-        _scheduler_instance.start()
-    return _scheduler_instance
+
+def set_system_config(key, value):
+    """Set system configuration value"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR REPLACE INTO system_config (key, value, updated_at)
+        VALUES (?, ?, datetime('now'))
+    ''', (key, value))
+    conn.commit()
+    conn.close()
+
+
+# Initialize database on module import
+init_database()
+
+# Restore jobs on module import (for application startup)
+restore_jobs_on_startup()
+
+
+if __name__ == '__main__':
+    # Test scheduling
+    from datetime import timedelta
+    
+    print("Testing scheduler...")
+    
+    # Schedule a job 30 seconds from now
+    future_time = (datetime.now() + timedelta(seconds=30)).isoformat()
+    job_id = create_job(
+        start_time=future_time,
+        duration=10,
+        name='Test Recording',
+        notes='Automated test'
+    )
+    
+    print(f"Created test job: {job_id}")
+    print("Pending jobs:")
+    for job in get_pending_jobs():
+        print(f"  {job['name']} - {job['start_time']}")

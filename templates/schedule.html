@@ -3,377 +3,384 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ILC Audio Recorder - Schedule</title>
+    <title>Audio Recorder - Schedule</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100">
-    <!-- Navigation -->
-    <nav class="bg-blue-600 text-white p-4">
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold">ILC Audio Recorder</h1>
+            <h1 class="text-2xl font-bold">Audio Recorder</h1>
             <div class="space-x-4">
+                <div class="flex items-center space-x-6">
+                <div class="space-x-4">
                 <a href="/" class="hover:underline">Dashboard</a>
                 <a href="/schedule" class="hover:underline font-semibold">Schedule</a>
                 <a href="/calendar" class="hover:underline">Calendar</a>
-                <a href="/recordings" class="hover:underline">Recordings</a>
                 <a href="/templates" class="hover:underline">Templates</a>
+                <a href="/recordings" class="hover:underline">Recordings</a>
+                <a href="/settings" class="hover:underline">Settings</a>
             </div>
+                <div id="current-datetime" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
+                    Loading...
+                </div>
+            </div>
+        </div>
         </div>
     </nav>
 
     <div class="container mx-auto p-6">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- New Schedule Form -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h2 class="text-xl font-bold mb-4">Create Schedule</h2>
-
-                <form id="schedule-form" class="space-y-4">
-                    <!-- Recording Name -->
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Recording Name</label>
-                        <input type="text" id="schedule-name" required
-                               class="w-full border rounded px-3 py-2"
-                               placeholder="scheduled_recording">
-                    </div>
-
-                    <!-- Duration -->
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Duration</label>
-                        <select id="schedule-duration" class="w-full border rounded px-3 py-2">
-                            <option value="300">5 minutes</option>
-                            <option value="600">10 minutes</option>
-                            <option value="900">15 minutes</option>
-                            <option value="1800">30 minutes</option>
-                            <option value="3600" selected>1 hour</option>
-                            <option value="7200">2 hours</option>
-                            <option value="14400">4 hours</option>
-                            <option value="21600">6 hours</option>
-                        </select>
-                    </div>
-
-                    <!-- Schedule Type -->
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Schedule Type</label>
-                        <select id="schedule-type" class="w-full border rounded px-3 py-2">
-                            <option value="one_time">One-Time</option>
-                            <option value="recurring">Recurring</option>
-                        </select>
-                    </div>
-
-                    <!-- One-Time Options -->
-                    <div id="one-time-options" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium mb-1">Start Date & Time</label>
-                            <input type="datetime-local" id="start-datetime" required
-                                   class="w-full border rounded px-3 py-2">
-                        </div>
-                    </div>
-
-                    <!-- Recurring Options -->
-                    <div id="recurring-options" class="space-y-4" style="display: none;">
-                        <div>
-                            <label class="block text-sm font-medium mb-1">Recurrence Pattern</label>
-                            <select id="recurrence-type" class="w-full border rounded px-3 py-2">
-                                <option value="daily">Daily</option>
-                                <option value="weekdays">Weekdays (Mon-Fri)</option>
-                                <option value="weekends">Weekends (Sat-Sun)</option>
-                                <option value="weekly">Weekly (Custom Days)</option>
-                                <option value="monthly">Monthly (Specific Day)</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium mb-1">Start Time</label>
-                            <input type="time" id="recurrence-time" required
-                                   class="w-full border rounded px-3 py-2"
-                                   value="09:00">
-                        </div>
-
-                        <!-- Weekly Days Selection -->
-                        <div id="weekly-days-options" style="display: none;">
-                            <label class="block text-sm font-medium mb-2">Select Days</label>
-                            <div class="grid grid-cols-2 gap-2">
-                                <label class="flex items-center">
-                                    <input type="checkbox" value="0" class="mr-2"> Monday
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" value="1" class="mr-2"> Tuesday
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" value="2" class="mr-2"> Wednesday
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" value="3" class="mr-2"> Thursday
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" value="4" class="mr-2"> Friday
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" value="5" class="mr-2"> Saturday
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" value="6" class="mr-2"> Sunday
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Monthly Day Selection -->
-                        <div id="monthly-day-options" style="display: none;">
-                            <label class="block text-sm font-medium mb-1">Day of Month (1-31)</label>
-                            <input type="number" id="day-of-month" min="1" max="31"
-                                   class="w-full border rounded px-3 py-2"
-                                   value="1">
-                        </div>
-                    </div>
-
-                    <!-- Notes -->
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Notes (Optional)</label>
-                        <textarea id="schedule-notes" rows="2"
-                                  class="w-full border rounded px-3 py-2"
-                                  placeholder="Optional notes about this recording"></textarea>
-                    </div>
-
-                    <!-- Load from Template -->
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Load from Template</label>
-                        <select id="template-select" class="w-full border rounded px-3 py-2">
-                            <option value="">-- Select Template --</option>
-                            {% for template in templates %}
-                            <option value="{{ template.id }}">{{ template.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <!-- Submit Button -->
-                    <button type="submit"
-                            class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold">
-                        Create Schedule
-                    </button>
-                </form>
+        <!-- New Schedule Form -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Create New Schedule</h2>
+            
+            <!-- Template Selection -->
+            <div class="mb-4">
+                <label class="block text-gray-700 mb-2">Use Template (Optional)</label>
+                <select id="template-select" onchange="loadTemplate()" 
+                    class="w-full border border-gray-300 rounded px-3 py-2">
+                    <option value="">-- Create from scratch --</option>
+                </select>
             </div>
 
-            <!-- Scheduled Jobs List -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h2 class="text-xl font-bold mb-4">Scheduled Recordings</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-gray-700 mb-2">Recording Name *</label>
+                    <input type="text" id="job-name" placeholder="e.g., Morning News"
+                        class="w-full border border-gray-300 rounded px-3 py-2" required>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 mb-2">Start Date & Time *</label>
+                    <input type="datetime-local" id="start-time"
+                        class="w-full border border-gray-300 rounded px-3 py-2" required>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 mb-2">Duration (minutes) *</label>
+                    <input type="number" id="duration" value="60" min="1" max="480"
+                        class="w-full border border-gray-300 rounded px-3 py-2" required>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 mb-2">Notes</label>
+                    <input type="text" id="notes" placeholder="Optional notes"
+                        class="w-full border border-gray-300 rounded px-3 py-2">
+                </div>
+            </div>
 
-                <div id="jobs-list" class="space-y-3">
-                    {% if jobs %}
-                        {% for job in jobs %}
-                        <div class="border rounded p-4 job-item" data-job-id="{{ job.id }}">
-                            <div class="flex justify-between items-start">
-                                <div class="flex-1">
-                                    <h3 class="font-semibold">{{ job.name }}</h3>
-                                    <p class="text-sm text-gray-600">
-                                        {% if job.recurrence_pattern %}
-                                            {{ job.recurrence_pattern }}
-                                        {% else %}
-                                            One-time: {{ job.next_run_formatted }}
-                                        {% endif %}
-                                    </p>
-                                    <p class="text-sm text-gray-500">
-                                        Duration: {{ job.duration }}s
-                                    </p>
-                                    {% if job.notes %}
-                                    <p class="text-sm text-gray-500 mt-1">
-                                        {{ job.notes }}
-                                    </p>
-                                    {% endif %}
-                                </div>
-                                <button class="delete-job-btn text-red-600 hover:text-red-800"
-                                        data-job-id="{{ job.id }}">
-                                    Delete
-                                </button>
-                            </div>
+            <!-- Recurring Schedule Options -->
+            <div class="mt-4 border-t pt-4">
+                <label class="flex items-center mb-2">
+                    <input type="checkbox" id="is-recurring" onchange="toggleRecurring()" class="mr-2">
+                    <span class="text-gray-700 font-medium">Recurring Schedule</span>
+                </label>
+
+                <div id="recurring-options" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                    <div>
+                        <label class="block text-gray-700 mb-2">Recurrence Pattern</label>
+                        <select id="recurrence-type" onchange="updateRecurringUI()"
+                            class="w-full border border-gray-300 rounded px-3 py-2">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+
+                    <!-- Weekly options -->
+                    <div id="weekly-options" class="hidden">
+                        <label class="block text-gray-700 mb-2">Days of Week</label>
+                        <div class="flex flex-wrap gap-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" value="0" class="weekday-check mr-1"> Mon
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="1" class="weekday-check mr-1"> Tue
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="2" class="weekday-check mr-1"> Wed
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="3" class="weekday-check mr-1"> Thu
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="4" class="weekday-check mr-1"> Fri
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="5" class="weekday-check mr-1"> Sat
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" value="6" class="weekday-check mr-1"> Sun
+                            </label>
                         </div>
-                        {% endfor %}
-                    {% else %}
-                        <p class="text-gray-500 text-center py-8">No scheduled recordings</p>
-                    {% endif %}
+                    </div>
+
+                    <!-- Monthly options -->
+                    <div id="monthly-options" class="hidden">
+                        <label class="block text-gray-700 mb-2">Day of Month</label>
+                        <input type="number" id="month-day" value="1" min="1" max="31"
+                            class="w-full border border-gray-300 rounded px-3 py-2">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Duration Override -->
+            <div class="mt-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="allow-override" class="mr-2">
+                    <span class="text-gray-700">Allow recording longer than 4 hours</span>
+                </label>
+            </div>
+
+            <button onclick="createSchedule()" 
+                class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-6 rounded">
+                Create Schedule
+            </button>
+        </div>
+
+        <!-- Scheduled Jobs List -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Scheduled Recordings</h2>
+            
+            <div id="jobs-container">
+                <div class="text-center py-8 text-gray-500">
+                    Loading scheduled jobs...
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Message Toast -->
-    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg"
-         style="display: none;">
-        <span id="toast-message"></span>
-    </div>
-
     <script>
-        // Show toast message
-        function showToast(message, duration = 3000) {
-            const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toast-message');
-            toastMessage.textContent = message;
-            toast.style.display = 'block';
-            setTimeout(() => {
-                toast.style.display = 'none';
-            }, duration);
-        }
-
-        // Schedule type change handler
-        document.getElementById('schedule-type').addEventListener('change', function() {
-            const oneTimeOptions = document.getElementById('one-time-options');
-            const recurringOptions = document.getElementById('recurring-options');
-
-            if (this.value === 'one_time') {
-                oneTimeOptions.style.display = 'block';
-                recurringOptions.style.display = 'none';
-            } else {
-                oneTimeOptions.style.display = 'none';
-                recurringOptions.style.display = 'block';
-            }
-        });
-
-        // Recurrence type change handler
-        document.getElementById('recurrence-type').addEventListener('change', function() {
-            const weeklyDays = document.getElementById('weekly-days-options');
-            const monthlyDay = document.getElementById('monthly-day-options');
-
-            weeklyDays.style.display = this.value === 'weekly' ? 'block' : 'none';
-            monthlyDay.style.display = this.value === 'monthly' ? 'block' : 'none';
-        });
-
-        // Template selection handler
-        document.getElementById('template-select').addEventListener('change', function() {
-            if (!this.value) return;
-
-            fetch(`/api/templates/get/${this.value}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const template = data.template;
-                        document.getElementById('schedule-name').value = template.name;
-                        document.getElementById('schedule-duration').value = template.duration;
-
-                        if (template.recurrence_type && template.recurrence_type !== 'one_time') {
-                            document.getElementById('schedule-type').value = 'recurring';
-                            document.getElementById('schedule-type').dispatchEvent(new Event('change'));
-
-                            document.getElementById('recurrence-type').value = template.recurrence_type;
-                            document.getElementById('recurrence-time').value = template.recurrence_time || '09:00';
-
-                            if (template.recurrence_type === 'weekly' && template.recurrence_days) {
-                                const days = template.recurrence_days.split(',');
-                                document.querySelectorAll('#weekly-days-options input[type="checkbox"]').forEach(cb => {
-                                    cb.checked = days.includes(cb.value);
-                                });
-                            }
-
-                            if (template.recurrence_type === 'monthly' && template.recurrence_day_of_month) {
-                                document.getElementById('day-of-month').value = template.recurrence_day_of_month;
-                            }
-
-                            document.getElementById('recurrence-type').dispatchEvent(new Event('change'));
-                        }
-
-                        if (template.description) {
-                            document.getElementById('schedule-notes').value = template.description;
-                        }
-
-                        showToast('Template loaded');
-                    }
-                });
-        });
-
-        // Form submit handler
-        document.getElementById('schedule-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const scheduleType = document.getElementById('schedule-type').value;
-            const name = document.getElementById('schedule-name').value;
-            const duration = parseInt(document.getElementById('schedule-duration').value);
-            const notes = document.getElementById('schedule-notes').value;
-
-            const data = {
-                type: scheduleType,
-                name: name,
-                duration: duration,
-                notes: notes
+        // Update current date/time display
+        function updateDateTime() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
             };
+            document.getElementById('current-datetime').textContent = 
+                now.toLocaleString('en-US', options);
+        }
+        
+        // Update immediately and then every second
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
 
-            if (scheduleType === 'one_time') {
-                const datetime = document.getElementById('start-datetime').value;
-                if (!datetime) {
-                    showToast('Please select a start date and time', 3000);
-                    return;
-                }
-                data.start_datetime = datetime;
-            } else {
-                const recurrenceType = document.getElementById('recurrence-type').value;
-                const recurrenceTime = document.getElementById('recurrence-time').value;
 
-                data.recurrence_type = recurrenceType;
-                data.start_time = recurrenceTime;
-
-                if (recurrenceType === 'weekly') {
-                    const selectedDays = [];
-                    document.querySelectorAll('#weekly-days-options input[type="checkbox"]:checked').forEach(cb => {
-                        selectedDays.push(parseInt(cb.value));
-                    });
-
-                    if (selectedDays.length === 0) {
-                        showToast('Please select at least one day for weekly recurrence', 3000);
-                        return;
-                    }
-                    data.days_of_week = selectedDays;
-                }
-
-                if (recurrenceType === 'monthly') {
-                    data.day_of_month = parseInt(document.getElementById('day-of-month').value);
-                }
-            }
-
-            fetch('/api/schedule/add', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    showToast('Schedule created successfully');
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    showToast('Error: ' + result.message, 5000);
-                }
-            })
-            .catch(error => {
-                showToast('Error: ' + error.message, 5000);
-            });
-        });
-
-        // Delete job handlers
-        document.querySelectorAll('.delete-job-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const jobId = this.getAttribute('data-job-id');
-
-                if (confirm('Delete this scheduled recording?')) {
-                    fetch(`/api/schedule/delete/${jobId}`, {
-                        method: 'DELETE'
-                    })
-                    .then(response => response.json())
-                    .then(result => {
-                        if (result.success) {
-                            showToast('Schedule deleted');
-                            document.querySelector(`.job-item[data-job-id="${jobId}"]`).remove();
-                        } else {
-                            showToast('Error: ' + result.message, 5000);
-                        }
-                    })
-                    .catch(error => {
-                        showToast('Error: ' + error.message, 5000);
-                    });
-                }
-            });
-        });
+        // Load templates on page load
+        loadTemplatesList();
 
         // Set minimum datetime to now
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        document.getElementById('start-datetime').min = now.toISOString().slice(0, 16);
+        document.getElementById('start-time').min = new Date().toISOString().slice(0, 16);
+
+        function toggleRecurring() {
+            const isRecurring = document.getElementById('is-recurring').checked;
+            const options = document.getElementById('recurring-options');
+            options.classList.toggle('hidden', !isRecurring);
+            if (isRecurring) updateRecurringUI();
+        }
+
+        function updateRecurringUI() {
+            const type = document.getElementById('recurrence-type').value;
+            document.getElementById('weekly-options').classList.toggle('hidden', type !== 'weekly');
+            document.getElementById('monthly-options').classList.toggle('hidden', type !== 'monthly');
+        }
+
+        async function loadTemplatesList() {
+            try {
+                const response = await fetch('/api/templates');
+                const templates = await response.json();
+                
+                const select = document.getElementById('template-select');
+                templates.forEach(tpl => {
+                    const option = document.createElement('option');
+                    option.value = tpl.id;
+                    option.textContent = tpl.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading templates:', error);
+            }
+        }
+
+        async function loadTemplate() {
+            const templateId = document.getElementById('template-select').value;
+            if (!templateId) return;
+
+            try {
+                const response = await fetch(`/api/templates/${templateId}`);
+                const tpl = await response.json();
+
+                document.getElementById('job-name').value = tpl.name;
+                document.getElementById('duration').value = tpl.duration / 60;
+                document.getElementById('notes').value = tpl.notes || '';
+
+                if (tpl.recurrence_pattern) {
+                    const pattern = JSON.parse(tpl.recurrence_pattern);
+                    document.getElementById('is-recurring').checked = true;
+                    toggleRecurring();
+                    document.getElementById('recurrence-type').value = pattern.type;
+                    updateRecurringUI();
+
+                    if (pattern.type === 'weekly' && pattern.days) {
+                        document.querySelectorAll('.weekday-check').forEach(cb => {
+                            cb.checked = pattern.days.includes(parseInt(cb.value));
+                        });
+                    } else if (pattern.type === 'monthly' && pattern.day) {
+                        document.getElementById('month-day').value = pattern.day;
+                    }
+                }
+            } catch (error) {
+                alert('Error loading template: ' + error);
+            }
+        }
+
+        async function createSchedule() {
+            const name = document.getElementById('job-name').value;
+            const startTime = document.getElementById('start-time').value;
+            const duration = parseInt(document.getElementById('duration').value) * 60;
+            const notes = document.getElementById('notes').value;
+            const isRecurring = document.getElementById('is-recurring').checked;
+            const allowOverride = document.getElementById('allow-override').checked;
+
+            if (!name || !startTime) {
+                alert('Please fill in all required fields');
+                return;
+            }
+
+            const startDate = new Date(startTime);
+            if (startDate <= new Date()) {
+                alert('Start time must be in the future');
+                return;
+            }
+
+            let recurrencePattern = null;
+            if (isRecurring) {
+                const type = document.getElementById('recurrence-type').value;
+                const pattern = { type };
+
+                if (type === 'weekly') {
+                    const days = Array.from(document.querySelectorAll('.weekday-check:checked'))
+                                     .map(cb => parseInt(cb.value));
+                    if (days.length === 0) {
+                        alert('Please select at least one day for weekly recurrence');
+                        return;
+                    }
+                    pattern.days = days;
+                } else if (type === 'monthly') {
+                    pattern.day = parseInt(document.getElementById('month-day').value);
+                }
+
+                recurrencePattern = JSON.stringify(pattern);
+            }
+
+            try {
+                const response = await fetch('/api/schedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        start_time: startTime,
+                        duration,
+                        notes,
+                        is_recurring: isRecurring,
+                        recurrence_pattern: recurrencePattern,
+                        allow_override: allowOverride
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.error) {
+                    alert('Error: ' + result.error);
+                } else {
+                    alert('Schedule created successfully!');
+                    location.reload();
+                }
+            } catch (error) {
+                alert('Error creating schedule: ' + error);
+            }
+        }
+
+        async function deleteJob(jobId) {
+            if (!confirm('Delete this scheduled recording?')) return;
+
+            try {
+                const response = await fetch(`/api/schedule/${jobId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                
+                if (result.error) {
+                    alert('Error: ' + result.error);
+                } else {
+                    location.reload();
+                }
+            } catch (error) {
+                alert('Error deleting schedule: ' + error);
+            }
+        }
     </script>
+
+    <!-- Server-side rendered jobs -->
+    {% if jobs %}
+    <script>
+        document.getElementById('jobs-container').innerHTML = `
+            <div class="space-y-3">
+                {% for job in jobs %}
+                <div class="border border-gray-200 rounded p-4 flex justify-between items-center
+                    {% if job.status == 'pending' %}bg-blue-50{% elif job.status == 'completed' %}bg-green-50{% else %}bg-gray-50{% endif %}">
+                    <div>
+                        <h3 class="font-semibold text-gray-800">
+                            {{ job.name }}
+                            {% if job.is_recurring %}
+                                <span class="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded ml-2">RECURRING</span>
+                            {% endif %}
+                        </h3>
+                        <p class="text-sm text-gray-600">
+                            {% if job.is_recurring %}
+                                Pattern: {{ job.recurrence_pattern }} |
+                            {% else %}
+                                Starts: {{ job.start_time }} |
+                            {% endif %}
+                            Duration: {{ job.duration // 60 }} minutes |
+                            Status: <span class="font-medium
+                                {% if job.status == 'pending' %}text-blue-600
+                                {% elif job.status == 'completed' %}text-green-600
+                                {% elif job.status == 'failed' %}text-red-600
+                                {% else %}text-gray-600{% endif %}">
+                                {{ job.status.upper() }}
+                            </span>
+                        </p>
+                        {% if job.notes %}
+                        <p class="text-sm text-gray-500 italic">{{ job.notes }}</p>
+                        {% endif %}
+                    </div>
+                    {% if job.status == 'pending' %}
+                    <button onclick="deleteJob('{{ job.id }}')" 
+                        class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded">
+                        Delete
+                    </button>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        `;
+    </script>
+    {% else %}
+    <script>
+        document.getElementById('jobs-container').innerHTML = `
+            <div class="text-center py-8 text-gray-500">
+                No scheduled recordings. Create one above!
+            </div>
+        `;
+    </script>
+    {% endif %}
 </body>
 </html>

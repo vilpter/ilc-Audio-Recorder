@@ -3,289 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ILC Audio Recorder - Recordings</title>
+    <title>Audio Recorder - Recordings</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100">
-    <!-- Navigation -->
-    <nav class="bg-blue-600 text-white p-4">
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold">ILC Audio Recorder</h1>
+            <h1 class="text-2xl font-bold">Audio Recorder</h1>
             <div class="space-x-4">
+                <div class="flex items-center space-x-6">
+                <div class="space-x-4">
                 <a href="/" class="hover:underline">Dashboard</a>
                 <a href="/schedule" class="hover:underline">Schedule</a>
                 <a href="/calendar" class="hover:underline">Calendar</a>
-                <a href="/recordings" class="hover:underline font-semibold">Recordings</a>
                 <a href="/templates" class="hover:underline">Templates</a>
+                <a href="/recordings" class="hover:underline font-semibold">Recordings</a>
+                <a href="/settings" class="hover:underline">Settings</a>
             </div>
+                <div id="current-datetime" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
+                    Loading...
+                </div>
+            </div>
+        </div>
         </div>
     </nav>
 
     <div class="container mx-auto p-6">
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold">Recorded Files</h2>
-                <button id="refresh-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
-                    Refresh
-                </button>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Recorded Files</h2>
+                <div class="text-sm text-gray-600">
+                    Total: <span id="file-count">{{ files|length }}</span> files
+                </div>
             </div>
 
-            <!-- Filter and Search -->
-            <div class="mb-4 flex space-x-4">
-                <input type="text" id="search-input"
-                       class="flex-1 border rounded px-3 py-2"
-                       placeholder="Search by filename...">
-                <select id="source-filter" class="border rounded px-3 py-2">
-                    <option value="">All Sources</option>
-                    <option value="source_A">Source A</option>
-                    <option value="source_B">Source B</option>
-                </select>
-            </div>
-
-            <!-- Recordings Table -->
+            {% if files %}
             <div class="overflow-x-auto">
                 <table class="w-full">
-                    <thead class="bg-gray-100 border-b">
-                        <tr>
-                            <th class="text-left p-3">Filename</th>
-                            <th class="text-left p-3">Modified</th>
-                            <th class="text-right p-3">Size</th>
-                            <th class="text-center p-3">Actions</th>
+                    <thead>
+                        <tr class="border-b-2 border-gray-200">
+                            <th class="text-left p-3 text-gray-700">Filename</th>
+                            <th class="text-left p-3 text-gray-700">Size</th>
+                            <th class="text-left p-3 text-gray-700">Modified</th>
+                            <th class="text-left p-3 text-gray-700">Type</th>
+                            <th class="text-right p-3 text-gray-700">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="recordings-table">
-                        {% if recordings %}
-                            {% for recording in recordings %}
-                            <tr class="border-b hover:bg-gray-50 recording-row"
-                                data-filename="{{ recording.filename }}">
-                                <td class="p-3">
-                                    <span class="font-mono text-sm">{{ recording.filename }}</span>
-                                </td>
-                                <td class="p-3 text-gray-600">
-                                    {{ recording.modified_formatted }}
-                                </td>
-                                <td class="p-3 text-right text-gray-600">
-                                    {{ recording.size_formatted }}
-                                </td>
-                                <td class="p-3 text-center">
-                                    <button class="download-btn text-blue-600 hover:text-blue-800 mr-3"
-                                            data-filename="{{ recording.filename }}">
-                                        Download
-                                    </button>
-                                    <button class="delete-btn text-red-600 hover:text-red-800"
-                                            data-filename="{{ recording.filename }}">
-                                        Delete
-                                    </button>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        {% else %}
-                            <tr>
-                                <td colspan="4" class="p-8 text-center text-gray-500">
-                                    No recordings found
-                                </td>
-                            </tr>
-                        {% endif %}
+                    <tbody>
+                        {% for file in files %}
+                        <tr class="border-b border-gray-100 hover:bg-gray-50" id="file-row-{{ loop.index }}">
+                            <td class="p-3">
+                                <span class="font-mono text-sm">{{ file.name }}</span>
+                            </td>
+                            <td class="p-3 text-gray-600">
+                                {{ file.size_mb }} MB
+                            </td>
+                            <td class="p-3 text-gray-600">
+                                {{ file.modified[:10] }} {{ file.modified[11:19] }}
+                            </td>
+                            <td class="p-3">
+                                <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                                    {{ file.type }}
+                                </span>
+                            </td>
+                            <td class="p-3 text-right space-x-2">
+                                <a href="/api/recordings/{{ file.name }}" download
+                                    class="inline-block bg-green-500 hover:bg-green-600 text-white text-sm px-3 py-1 rounded">
+                                    Download
+                                </a>
+                                <button onclick="deleteFile('{{ file.name }}', {{ loop.index }})" 
+                                    class="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>
 
-            <!-- Summary -->
-            <div class="mt-6 text-sm text-gray-600">
-                <span id="file-count">{{ recordings|length }}</span> file(s) total
+            <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
+                <h3 class="font-semibold text-blue-900 mb-2">Storage Info</h3>
+                <p class="text-sm text-blue-800">
+                    Recordings are stored in: <code class="bg-blue-100 px-2 py-1 rounded">/home/pi/recordings/</code>
+                </p>
+                <p class="text-sm text-blue-800 mt-1">
+                    Total files size: <strong>{{ (files | map(attribute='size') | sum / 1024 / 1024) | round(2) }} MB</strong>
+                </p>
             </div>
-        </div>
-    </div>
 
-    <!-- Message Toast -->
-    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg"
-         style="display: none;">
-        <span id="toast-message"></span>
-    </div>
-
-    <!-- Confirm Delete Modal -->
-    <div id="delete-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
-         style="display: none;">
-        <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 class="text-xl font-bold mb-4">Confirm Delete</h3>
-            <p class="mb-4">Are you sure you want to delete this recording?</p>
-            <p class="mb-6 font-mono text-sm bg-gray-100 p-2 rounded" id="delete-filename"></p>
-            <div class="flex justify-end space-x-4">
-                <button id="cancel-delete" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">
-                    Cancel
-                </button>
-                <button id="confirm-delete" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">
-                    Delete
-                </button>
+            {% else %}
+            <div class="text-center py-12">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                        d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h3 class="mt-2 text-lg font-medium text-gray-900">No recordings yet</h3>
+                <p class="mt-1 text-gray-500">Start a recording to see files here</p>
+                <div class="mt-6">
+                    <a href="/" class="inline-block bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded">
+                        Go to Dashboard
+                    </a>
+                </div>
             </div>
+            {% endif %}
         </div>
     </div>
 
     <script>
-        let allRecordings = [];
-        let currentDeleteFilename = null;
-
-        // Show toast message
-        function showToast(message, duration = 3000) {
-            const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toast-message');
-            toastMessage.textContent = message;
-            toast.style.display = 'block';
-            setTimeout(() => {
-                toast.style.display = 'none';
-            }, duration);
+        // Update current date/time display
+        function updateDateTime() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            };
+            document.getElementById('current-datetime').textContent = 
+                now.toLocaleString('en-US', options);
         }
+        
+        // Update immediately and then every second
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
 
-        // Load recordings from API
-        function loadRecordings() {
-            fetch('/api/recordings/list')
-                .then(response => response.json())
-                .then(data => {
-                    allRecordings = data.recordings || [];
-                    filterAndDisplayRecordings();
-                })
-                .catch(error => {
-                    showToast('Error loading recordings: ' + error.message, 5000);
+
+        async function deleteFile(filename, rowIndex) {
+            if (!confirm(`Delete ${filename}?`)) return;
+
+            try {
+                const response = await fetch(`/api/recordings/${filename}`, {
+                    method: 'DELETE'
                 });
-        }
 
-        // Filter and display recordings
-        function filterAndDisplayRecordings() {
-            const searchTerm = document.getElementById('search-input').value.toLowerCase();
-            const sourceFilter = document.getElementById('source-filter').value;
-
-            const filtered = allRecordings.filter(rec => {
-                const matchesSearch = rec.filename.toLowerCase().includes(searchTerm);
-                const matchesSource = !sourceFilter || rec.filename.startsWith(sourceFilter);
-                return matchesSearch && matchesSource;
-            });
-
-            updateTable(filtered);
-            document.getElementById('file-count').textContent = filtered.length;
-        }
-
-        // Update table with recordings
-        function updateTable(recordings) {
-            const tbody = document.getElementById('recordings-table');
-
-            if (recordings.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="4" class="p-8 text-center text-gray-500">
-                            No recordings found
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-
-            tbody.innerHTML = recordings.map(rec => `
-                <tr class="border-b hover:bg-gray-50 recording-row" data-filename="${rec.filename}">
-                    <td class="p-3">
-                        <span class="font-mono text-sm">${rec.filename}</span>
-                    </td>
-                    <td class="p-3 text-gray-600">
-                        ${rec.modified_formatted}
-                    </td>
-                    <td class="p-3 text-right text-gray-600">
-                        ${rec.size_formatted}
-                    </td>
-                    <td class="p-3 text-center">
-                        <button class="download-btn text-blue-600 hover:text-blue-800 mr-3"
-                                data-filename="${rec.filename}">
-                            Download
-                        </button>
-                        <button class="delete-btn text-red-600 hover:text-red-800"
-                                data-filename="${rec.filename}">
-                            Delete
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
-
-            // Attach event listeners
-            attachEventListeners();
-        }
-
-        // Attach event listeners to buttons
-        function attachEventListeners() {
-            // Download buttons
-            document.querySelectorAll('.download-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const filename = this.getAttribute('data-filename');
-                    window.location.href = `/api/recordings/download/${filename}`;
-                });
-            });
-
-            // Delete buttons
-            document.querySelectorAll('.delete-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const filename = this.getAttribute('data-filename');
-                    showDeleteModal(filename);
-                });
-            });
-        }
-
-        // Show delete confirmation modal
-        function showDeleteModal(filename) {
-            currentDeleteFilename = filename;
-            document.getElementById('delete-filename').textContent = filename;
-            document.getElementById('delete-modal').style.display = 'flex';
-        }
-
-        // Close delete modal
-        function closeDeleteModal() {
-            currentDeleteFilename = null;
-            document.getElementById('delete-modal').style.display = 'none';
-        }
-
-        // Confirm delete
-        document.getElementById('confirm-delete').addEventListener('click', function() {
-            if (!currentDeleteFilename) return;
-
-            fetch(`/api/recordings/delete/${currentDeleteFilename}`, {
-                method: 'DELETE'
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    showToast('Recording deleted successfully');
-                    closeDeleteModal();
-                    loadRecordings();
+                const result = await response.json();
+                
+                if (result.error) {
+                    alert('Error: ' + result.error);
                 } else {
-                    showToast('Error: ' + result.message, 5000);
+                    // Remove row from table
+                    document.getElementById(`file-row-${rowIndex}`).remove();
+                    
+                    // Update file count
+                    const countElem = document.getElementById('file-count');
+                    countElem.textContent = parseInt(countElem.textContent) - 1;
+                    
+                    // Reload if no files left
+                    if (parseInt(countElem.textContent) === 0) {
+                        location.reload();
+                    }
                 }
-            })
-            .catch(error => {
-                showToast('Error: ' + error.message, 5000);
-            });
-        });
-
-        // Cancel delete
-        document.getElementById('cancel-delete').addEventListener('click', closeDeleteModal);
-
-        // Close modal on background click
-        document.getElementById('delete-modal').addEventListener('click', function(e) {
-            if (e.target.id === 'delete-modal') {
-                closeDeleteModal();
+            } catch (error) {
+                alert('Error deleting file: ' + error);
             }
-        });
-
-        // Search and filter handlers
-        document.getElementById('search-input').addEventListener('input', filterAndDisplayRecordings);
-        document.getElementById('source-filter').addEventListener('change', filterAndDisplayRecordings);
-
-        // Refresh button
-        document.getElementById('refresh-btn').addEventListener('click', loadRecordings);
-
-        // Initial load
-        {% if not recordings %}
-        loadRecordings();
-        {% else %}
-        // Store server-rendered data
-        allRecordings = {{ recordings | tojson }};
-        attachEventListeners();
-        {% endif %}
+        }
     </script>
 </body>
 </html>
