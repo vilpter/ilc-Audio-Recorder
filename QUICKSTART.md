@@ -8,41 +8,28 @@
 - [ ] Network connection (Ethernet or WiFi)
 - [ ] SSH access configured
 
-### Installation (5 Minutes)
+### Installation (Automated)
 
 ```bash
-# 1. Update system
-sudo apt update && sudo apt upgrade -y
-
-# 2. Install dependencies
-sudo apt install -y python3-pip ffmpeg alsa-utils sqlite3
-
-# 3. Go to home directory and upload/clone project
+# 1. Clone or download the project
 cd ~
-# [Upload the ilc-audio-recorder folder here]
+git clone https://github.com/vilpter/ilc-Audio-Recorder.git audio-recorder
+cd audio-recorder
 
-# 4. Install Python packages
-cd ~/ilc-audio-recorder
-pip3 install -r requirements.txt --break-system-packages
+# 2. Run the installer (handles everything)
+./install.sh
 
-# 5. Configure ALSA
-sudo cp configs/asound.conf /etc/asound.conf
-sudo alsactl kill rescan
-
-# 6. Create recordings directory
-mkdir -p ~/recordings
-
-# 7. Install systemd service
-sudo mkdir -p /var/log/ilc-audio-recorder
-sudo chown pi:pi /var/log/ilc-audio-recorder
-sudo cp ilc-audio-recorder.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable ilc-audio-recorder
-sudo systemctl start ilc-audio-recorder
-
-# 8. Check status
-sudo systemctl status ilc-audio-recorder
+# 3. Access web UI
+# Open browser to: http://<pi-ip>:5000
 ```
+
+That's it! The installer handles:
+- System dependencies (Python, FFmpeg, ALSA)
+- Python packages
+- ALSA configuration
+- Recordings directory
+- Systemd service setup
+- Log directories
 
 ### Access the Web UI
 
@@ -56,18 +43,12 @@ Open in browser:
 http://YOUR_PI_IP:5000
 ```
 
-Or use hostname:
-```
-http://ilc-recorder.local:5000
-```
-
 ### First Recording
 
 1. Go to **Dashboard** (/)
-2. Enter a recording name (optional)
-3. Select duration (default: 1 hour)
-4. Click **Start Recording**
-5. Files will be saved to `~/recordings/`
+2. Select duration (default: 1 hour)
+3. Click **Start Recording**
+4. Files will be saved to `~/recordings/`
 
 ### Verify Audio is Working
 
@@ -91,15 +72,20 @@ rm test.wav
 
 **Web UI not accessible?**
 ```bash
-# Check service
-sudo systemctl status ilc-audio-recorder
+# Run the fix script
+./fix_service.sh
 
-# Check logs
-tail -f /var/log/ilc-audio-recorder/app.log
+# Or manually check
+sudo systemctl status audio-recorder
+tail -f /var/log/audio-recorder/app.log
 ```
 
 **UCA202 not found?**
 ```bash
+# Run audio configuration helper
+./configure_audio.sh
+
+# Or manually check
 lsusb | grep Audio
 sudo reboot
 ```
@@ -112,25 +98,25 @@ df -h ~/recordings
 # Test FFmpeg manually
 ffmpeg -f alsa -i hw:1 -t 5 \
   -filter_complex "[0:a]channelsplit=channel_layout=stereo[left][right]" \
-  -map "[left]" -acodec pcm_s16le -ar 48000 test_A.wav \
-  -map "[right]" -acodec pcm_s16le -ar 48000 test_B.wav
+  -map "[left]" -acodec pcm_s16le -ar 48000 test_L.wav \
+  -map "[right]" -acodec pcm_s16le -ar 48000 test_R.wav
 ```
 
 ### Common Tasks
 
 **Stop service:**
 ```bash
-sudo systemctl stop ilc-audio-recorder
+sudo systemctl stop audio-recorder
 ```
 
 **Restart service:**
 ```bash
-sudo systemctl restart ilc-audio-recorder
+sudo systemctl restart audio-recorder
 ```
 
 **View logs:**
 ```bash
-tail -f /var/log/ilc-audio-recorder/app.log
+tail -f /var/log/audio-recorder/app.log
 ```
 
 **Find recordings:**
@@ -138,4 +124,12 @@ tail -f /var/log/ilc-audio-recorder/app.log
 ls -lh ~/recordings/
 ```
 
-That's it! You're recording. For detailed documentation, see [README.md](README.md).
+### Configuration
+
+Access **Settings** page in the web UI to:
+- Configure audio device (auto-detect or manual)
+- Customize recording filename format (channel suffixes)
+- Export/import schedules and configuration
+- Backup and restore settings
+
+For detailed documentation, see [README.md](README.md).

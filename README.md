@@ -1,79 +1,86 @@
-# ILC Audio Recorder
+# Audio Recorder
 
-A headless dual-mono audio archiving system for Raspberry Pi with Behringer UCA202 USB audio interface. Features a web-based interface for scheduling recordings, managing files, and monitoring status.
+**Headless Dual-Mono Audio Recording System for Raspberry Pi**
+
+A professional-grade dual-channel audio recording system with web-based scheduling and management for Raspberry Pi with Behringer UCA202 USB audio interface.
 
 ## Features
 
-### Phase 1 (Current Implementation)
-- ✅ Web UI accessible via local network
-- ✅ Manual recording start/stop with configurable duration
-- ✅ Scheduled recordings (one-time and recurring)
-- ✅ Recurring patterns: daily, weekly, monthly, weekdays, weekends
-- ✅ Recording templates for preset configurations
-- ✅ Multi-week calendar view of scheduled recordings
-- ✅ File browser with download and delete capabilities
-- ✅ Pre-flight disk space checks
-- ✅ 4-hour default duration limit with override option
-- ✅ Automatic service restart on reboot (systemd)
-- ✅ Schedule persistence across reboots (SQLite)
+### Recording
+- Dual-mono capture (48kHz, 16-bit WAV, independent channels)
+- Manual start/stop from Dashboard
+- Configurable recording filenames with customizable channel suffixes
+- Human-readable filename format: `YYYY_MMM_DD_HH:MM_L.wav`
+- 4-hour duration limit with override option
+- Pre-flight disk space checking
 
-### Phase 2 (Future)
-- ⏳ Basic authentication for web UI
-- ⏳ Auto-cleanup of old files (retention policy)
-- ⏳ Export schedule as iCal
-- ⏳ Log viewer in web UI
-- ⏳ Dark mode UI
+### Scheduling
+- One-time scheduled recordings
+- Recurring schedules (daily, weekly, monthly patterns)
+- Recording templates (save and reuse configurations)
+- Multi-week calendar view
+- Click calendar days to create schedules instantly
 
-### Phase 3 (Future)
-- ⏳ Real-time status display with polling
-- ⏳ Disk space monitoring with warnings
-- ⏳ Audio level meter preview
-- ⏳ Optional post-recording conversion (WAV → MP3/FLAC)
+### Web Interface
+- Dashboard with real-time status
+- Schedule management page
+- Visual calendar with color-coded events
+- Template library
+- File browser with download/delete
+- Live date/time display on all pages
+- Settings page with device configuration
+- Complete backup/restore system
+
+### System
+- Auto-start service (systemd)
+- Automated installation script
+- Automatic audio device detection
+- Schedule persistence across reboots
+- Export/import configuration and schedules
 
 ## Hardware Requirements
 
 - **Raspberry Pi:** Pi 3B/3B+ or Pi 4 (2GB+ RAM recommended)
-- **Audio Interface:** Behringer UCA202 USB
+- **Audio Interface:** Behringer UCA202 or UCA222 USB
 - **Storage:** 32GB+ SD card (Class 10 or better)
 - **Power Supply:** 5V/2.5A (Pi 3) or 5V/3A (Pi 4)
 - **Network:** Ethernet or WiFi connection
 
 ## Software Requirements
 
-- **OS:** Raspberry Pi OS Lite (64-bit) - Trixie (Debian 13) **RECOMMENDED**
+- **OS:** Raspberry Pi OS Lite (64-bit) - Trixie (Debian 13) recommended
   - Alternative: Bookworm (Debian 12) also supported
 - **Download:** https://www.raspberrypi.com/software/operating-systems/
 - **Image:** "Raspberry Pi OS Lite (64-bit)" - No desktop environment
 
-## Installation
+## Quick Start
 
-### Step 0: Prepare Raspberry Pi
+```bash
+# Clone the repository
+cd ~
+git clone https://github.com/vilpter/ilc-Audio-Recorder.git audio-recorder
+cd audio-recorder
 
-1. **Flash OS to SD Card** using Raspberry Pi Imager
-   - Select "Raspberry Pi OS Lite (64-bit)"
-   - Click the gear icon for advanced settings
+# Run the automated installer
+./install.sh
 
-2. **Configure Headless Access** in Raspberry Pi Imager:
-   - ✅ Enable SSH
-   - ✅ Set hostname (e.g., `ilc-recorder`)
-   - ✅ Configure username/password (default: `pi`)
-   - ✅ Set WiFi credentials (if not using Ethernet)
-   - ✅ Set locale and timezone
+# Access web interface
+# Open browser: http://<raspberry-pi-ip>:5000
+```
 
-3. **First Boot:**
-   - Insert SD card and power on
-   - Wait 2-3 minutes for initial boot
-   - Connect via SSH: `ssh pi@ilc-recorder.local`
+The installer handles:
+- System dependencies (Python, FFmpeg, ALSA, SQLite)
+- Python packages
+- ALSA configuration
+- Recordings directory
+- Systemd service setup
+- Log directories
 
-4. **Verify Installation:**
-   ```bash
-   cat /etc/os-release  # Should show Debian 13 (trixie) or 12 (bookworm)
-   uname -m             # Should show: aarch64 (64-bit ARM)
-   ```
+## Installation (Manual)
+
+If you prefer manual installation or the installer encounters issues:
 
 ### Step 1: System Updates
-
-**IMPORTANT: Always update first!**
 
 ```bash
 sudo apt update && sudo apt upgrade -y
@@ -82,93 +89,43 @@ sudo apt update && sudo apt upgrade -y
 ### Step 2: Install Dependencies
 
 ```bash
-# Install system packages
 sudo apt install -y python3-pip ffmpeg alsa-utils sqlite3 git
-
-# Verify installations
-ffmpeg -version
-python3 --version  # Should be Python 3.11+
 ```
 
-### Step 3: Install ILC Audio Recorder
+### Step 3: Install Python Dependencies
 
 ```bash
-# Clone or copy the project
-cd ~
-# If using git:
-# git clone <repository-url> ilc-audio-recorder
-
-# If copying files manually, upload to ~/ilc-audio-recorder
-
-cd ~/ilc-audio-recorder
-
-# Install Python dependencies
+cd ~/audio-recorder
 pip3 install -r requirements.txt --break-system-packages
 ```
-
-**Note:** The `--break-system-packages` flag is required on newer Raspberry Pi OS versions that use externally-managed Python environments.
 
 ### Step 4: Configure ALSA
 
 ```bash
-# Copy ALSA configuration
 sudo cp configs/asound.conf /etc/asound.conf
-
-# Reload ALSA
 sudo alsactl kill rescan
 
 # Verify UCA202 is detected
 arecord -l
 # Should show: card 1: CODEC [USB Audio CODEC]
-
-# Test audio capture (5 second test)
-arecord -D hw:1 -f S16_LE -r 48000 -c 2 -d 5 test.wav
-aplay test.wav  # Play back to verify (if speakers connected)
-rm test.wav
 ```
 
-### Step 5: Create Recordings Directory
+### Step 5: Create Directories
 
 ```bash
-# Create recordings directory
 mkdir -p ~/recordings
-
-# Verify write permissions
-touch ~/recordings/test.txt && rm ~/recordings/test.txt
+mkdir -p ~/.audio-recorder
 ```
 
 ### Step 6: Install Systemd Service
 
 ```bash
-# Create log directory
-sudo mkdir -p /var/log/ilc-audio-recorder
-sudo chown pi:pi /var/log/ilc-audio-recorder
-
-# Copy service file
-sudo cp ilc-audio-recorder.service /etc/systemd/system/
-
-# Reload systemd
+sudo mkdir -p /var/log/audio-recorder
+sudo chown $USER:$USER /var/log/audio-recorder
+sudo cp audio-recorder.service /etc/systemd/system/
 sudo systemctl daemon-reload
-
-# Enable auto-start on boot
-sudo systemctl enable ilc-audio-recorder
-
-# Start the service
-sudo systemctl start ilc-audio-recorder
-
-# Check status
-sudo systemctl status ilc-audio-recorder
-```
-
-### Step 7: Access Web Interface
-
-Open a browser and navigate to:
-- **By hostname:** http://ilc-recorder.local:5000
-- **By IP address:** http://YOUR_PI_IP:5000
-
-To find your Pi's IP address:
-```bash
-hostname -I
+sudo systemctl enable audio-recorder
+sudo systemctl start audio-recorder
 ```
 
 ## Usage
@@ -176,58 +133,59 @@ hostname -I
 ### Dashboard (/)
 - View current recording status
 - Start/stop manual recordings
-- Configure recording duration
-- Monitor disk space
+- Quick record presets
 
 ### Schedule (/schedule)
 - Create one-time scheduled recordings
-- Create recurring schedules (daily, weekly, monthly)
+- Create recurring schedules
 - Load presets from templates
 - View and delete scheduled jobs
 
 ### Calendar (/calendar)
 - Visual multi-week calendar view
 - See all upcoming recordings
-- Distinguish one-time vs recurring events
-- Click dates to see event details
+- Click any day to create a new schedule
+
+### Templates (/templates)
+- Create reusable recording presets
+- Save common recording configurations
+- Quick-load templates when scheduling
 
 ### Recordings (/recordings)
 - Browse all recorded files
 - Download recordings
 - Delete old files
-- Search and filter by source (A/B)
 
-### Templates (/templates)
-- Create reusable recording presets
-- Save common recording configurations
-- Edit existing templates
-- Quick-load templates when scheduling
+### Settings (/settings)
+- Configure audio device (auto-detect or manual)
+- Customize recording filename format
+- Set channel suffixes (L/R or custom)
+- Export schedules and configuration
+- Import backups with one-click revert
 
 ## File Structure
 
 ```
-ilc-audio-recorder/
-├── app.py                      # Flask web server
-├── recorder.py                 # Audio capture logic
-├── scheduler.py                # Job scheduling (APScheduler)
-├── templates_manager.py        # Recording templates manager
-├── requirements.txt            # Python dependencies
-├── ilc-audio-recorder.service  # Systemd service file
-├── README.md                   # This file
-├── PROJECT_SCOPE.md            # Detailed project scope
+audio-recorder/
+├── app.py                    # Flask web server
+├── recorder.py               # Audio capture logic
+├── scheduler.py              # Job scheduling (APScheduler)
+├── templates_manager.py      # Recording templates manager
+├── requirements.txt          # Python dependencies
+├── audio-recorder.service    # Systemd service file
+├── install.sh                # Automated installer
+├── configure_audio.sh        # Audio configuration helper
+├── fix_service.sh            # Service troubleshooting script
 ├── configs/
-│   └── asound.conf            # ALSA configuration
-├── templates/                  # HTML templates
-│   ├── index.html             # Dashboard
-│   ├── schedule.html          # Schedule manager
-│   ├── calendar.html          # Calendar view
-│   ├── recordings.html        # File browser
-│   └── templates_mgmt.html    # Template manager
-├── static/                     # Static assets (if any)
-└── data/                       # SQLite databases (auto-created)
-    ├── scheduler.db           # Scheduled jobs
-    ├── scheduler.db.meta      # Job metadata
-    └── templates.db           # Recording templates
+│   ├── asound.conf           # ALSA configuration
+│   └── 85-usb-audio.rules    # udev rules for USB audio
+└── templates/                # HTML templates
+    ├── index.html            # Dashboard
+    ├── schedule.html         # Schedule manager
+    ├── calendar.html         # Calendar view
+    ├── recordings.html       # File browser
+    ├── templates_mgmt.html   # Template manager
+    └── settings.html         # Settings page
 ```
 
 ## Recording File Format
@@ -236,47 +194,65 @@ Files are saved as dual-mono WAV files:
 - **Format:** PCM 16-bit
 - **Sample Rate:** 48kHz
 - **Channels:** 2 (split into separate files)
-- **Naming:** `source_[A|B]_YYYYMMDD_HHMMSS.wav`
+- **Naming:** `YYYY_MMM_DD_HH:MM_SUFFIX.wav`
 
 **Example:**
 ```
-source_A_20260112_143022.wav  # Left channel (Source A)
-source_B_20260112_143022.wav  # Right channel (Source B)
+2026_Jan_17_14:30_L.wav  # Left channel
+2026_Jan_17_14:30_R.wav  # Right channel
 ```
 
 **File Size Estimates:**
-- ~10 MB/minute/channel
-- ~1.2 GB/hour for both channels
-- 4-hour recording ≈ 4.8 GB total
+- ~345 MB/hour per channel
+- ~690 MB/hour for both channels
+- 4-hour recording ≈ 2.8 GB total
+
+## Configuration
+
+### Audio Device
+The system auto-detects USB audio devices. Configure in Settings page:
+- **Auto-detect:** Recommended, finds UCA202 automatically
+- **Manual:** Select specific device if multiple audio interfaces present
+
+### Recording Filenames
+Configure channel suffixes in Settings:
+- Default: `L` and `R`
+- Change to anything (e.g., "Left"/"Right", "Ch1"/"Ch2")
+- Live preview shows expected filename format
+
+### Backup/Restore
+Export from Settings page:
+- **Schedules (.sched):** All scheduled recordings and templates
+- **Configuration (.conf):** Audio device settings, channel suffixes
+
+Import features:
+- Two-step confirmation before overwriting
+- Automatic backup before any import
+- One-click revert to undo last import
 
 ## Troubleshooting
 
 ### Service Won't Start
 
 ```bash
-# Check service status
-sudo systemctl status ilc-audio-recorder
+# Run the fix script
+./fix_service.sh
 
-# View logs
-sudo journalctl -u ilc-audio-recorder -n 50
-
-# Check application logs
-tail -f /var/log/ilc-audio-recorder/app.log
-tail -f /var/log/ilc-audio-recorder/error.log
+# Or manually check
+sudo systemctl status audio-recorder
+sudo journalctl -u audio-recorder -n 50
+tail -f /var/log/audio-recorder/app.log
 ```
 
 ### UCA202 Not Detected
 
 ```bash
-# List USB devices
-lsusb
-# Should show: "Burr-Brown from TI USB Audio CODEC"
+# Run audio configuration helper
+./configure_audio.sh
 
-# List ALSA cards
+# Or manually check
+lsusb | grep Audio
 arecord -l
-# Should show card 1: CODEC [USB Audio CODEC]
-
-# If missing, try:
 sudo reboot
 ```
 
@@ -284,16 +260,13 @@ sudo reboot
 
 ```bash
 # Check if service is running
-sudo systemctl status ilc-audio-recorder
+sudo systemctl status audio-recorder
 
 # Check if port 5000 is open
 sudo netstat -tlnp | grep 5000
 
 # Test from Pi itself
 curl http://localhost:5000
-
-# Check firewall (if enabled)
-sudo ufw status
 ```
 
 ### Recording Fails to Start
@@ -305,153 +278,75 @@ sudo ufw status
 
 2. **Test FFmpeg manually:**
    ```bash
-   ffmpeg -f alsa -i hw:1 -t 10 \
+   ffmpeg -f alsa -i hw:1 -t 5 \
      -filter_complex "[0:a]channelsplit=channel_layout=stereo[left][right]" \
-     -map "[left]" -acodec pcm_s16le -ar 48000 test_A.wav \
-     -map "[right]" -acodec pcm_s16le -ar 48000 test_B.wav
+     -map "[left]" -acodec pcm_s16le -ar 48000 test_L.wav \
+     -map "[right]" -acodec pcm_s16le -ar 48000 test_R.wav
    ```
 
 3. **Check ALSA permissions:**
    ```bash
-   groups pi  # Should include "audio"
+   groups $USER  # Should include "audio"
    ```
-
-### Scheduled Jobs Not Running
-
-```bash
-# Check scheduler database
-sqlite3 ~/ilc-audio-recorder/data/scheduler.db "SELECT * FROM apscheduler_jobs;"
-
-# Check job metadata
-sqlite3 ~/ilc-audio-recorder/data/scheduler.db.meta "SELECT * FROM job_metadata;"
-
-# Restart service
-sudo systemctl restart ilc-audio-recorder
-```
-
-## Configuration
-
-### Change Recordings Directory
-
-Edit the service file:
-```bash
-sudo nano /etc/systemd/system/ilc-audio-recorder.service
-```
-
-Change this line:
-```ini
-Environment="RECORDINGS_DIR=/home/pi/recordings"
-```
-
-Then reload and restart:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl restart ilc-audio-recorder
-```
-
-### Change Web Port
-
-Edit `app.py` and change the port in the last line:
-```python
-app.run(host='0.0.0.0', port=5000, debug=False)
-```
-
-Then restart the service.
-
-## Maintenance
-
-### View Logs
-
-```bash
-# Application logs
-tail -f /var/log/ilc-audio-recorder/app.log
-
-# Error logs
-tail -f /var/log/ilc-audio-recorder/error.log
-
-# System journal
-sudo journalctl -u ilc-audio-recorder -f
-```
-
-### Backup Configuration
-
-```bash
-# Backup databases
-cp ~/ilc-audio-recorder/data/*.db ~/backups/
-
-# Backup recordings
-rsync -av ~/recordings/ ~/backups/recordings/
-```
-
-### Update Software
-
-```bash
-cd ~/ilc-audio-recorder
-git pull  # If using git
-
-# Restart service
-sudo systemctl restart ilc-audio-recorder
-```
-
-## Security Notes
-
-- This system is designed for **local network use only**
-- No authentication is implemented in Phase 1
-- Do not expose port 5000 to the internet
-- For remote access, use SSH tunneling or VPN
-- Phase 2 will add basic HTTP authentication
 
 ## Performance
 
-- **Pi 3:** Handles dual-mono 48kHz recording effortlessly
-- **Pi 4:** Identical performance for this workload
-- **CPU Usage:** <5% during recording
-- **RAM Usage:** ~100-150MB for web service
-- **Network:** Minimal bandwidth (web UI only)
+| Resource | Usage | Notes |
+|----------|-------|-------|
+| **CPU** | <5% | During recording on Pi 3/4 |
+| **RAM** | ~100 MB | Application memory |
+| **Disk I/O** | 384 KB/s | Sustained write rate |
+| **File Size** | ~345 MB/hour | Per channel (WAV format) |
 
-## Technical Details
+## Security Notes
 
-### Audio Capture Pipeline
+- Designed for **local network use only**
+- No authentication implemented (Phase 2 feature)
+- Do not expose port 5000 to the internet
+- For remote access, use SSH tunneling or VPN
 
-```
-Behringer UCA202 (USB)
-    ↓
-ALSA hw:1 (stereo input)
-    ↓
-FFmpeg channelsplit filter
-    ↓
-Two mono WAV files (Source A + Source B)
-```
+## Changelog
 
-### Scheduling System
+### v1.2.0 (Current)
+- Fixed recording stop button error when recording already finished
+- Added live date/time clock in navigation bar
+- Added configurable recording filename format
+- Added calendar day click to create schedules
+- Added complete backup/restore system
+- Refactored code for better maintainability
 
-- **Engine:** APScheduler with SQLite persistence
-- **Triggers:** CronTrigger for recurring, DateTrigger for one-time
-- **Persistence:** Jobs survive service restarts and reboots
-- **Execution:** Python threading for concurrent recording management
+### v1.1.0
+- Added automated installation script
+- Fixed username detection for systemd service
+
+### v1.0.0
+- Initial release with core recording and scheduling features
+
+See [RELEASE_NOTES_v1.2.0.md](RELEASE_NOTES_v1.2.0.md) for detailed changes.
+
+## Roadmap
+
+### Planned Features
+- Real-time status polling without page refresh
+- Disk space monitoring dashboard
+- Audio level meter preview
+- Optional post-processing (WAV → MP3/FLAC)
+- Email/webhook notifications
+- Basic authentication for web UI
+
+## Built With
+
+- **Backend:** Python 3.11+, Flask, APScheduler
+- **Frontend:** HTML5, Tailwind CSS, Vanilla JavaScript
+- **Audio:** FFmpeg, ALSA
+- **Database:** SQLite3
 
 ## Support
 
-For issues, questions, or contributions:
-- Check the `PROJECT_SCOPE.md` for detailed architectural information
-- Review logs in `/var/log/ilc-audio-recorder/`
-- Test components individually (FFmpeg, ALSA, Python modules)
-
-## License
-
-This project is provided as-is for educational and archival purposes.
-
-## Credits
-
-Built with:
-- **Flask** - Web framework
-- **APScheduler** - Job scheduling
-- **FFmpeg** - Audio processing
-- **Tailwind CSS** - UI styling
-- **Raspberry Pi OS** - Operating system
+- **Issues:** [GitHub Issues](https://github.com/vilpter/ilc-Audio-Recorder/issues)
+- **Quick Fixes:** Run `./fix_service.sh` or `./configure_audio.sh`
 
 ---
 
-**Version:** 1.0.0 (Phase 1)
-**Last Updated:** 2026-01-12
-**Status:** Production Ready
+**Version:** 1.2.0
+**Last Updated:** 2026-01-17

@@ -1,6 +1,6 @@
 # Deployment Checklist
 
-Use this checklist when deploying ILC Audio Recorder to a new Raspberry Pi.
+Use this checklist when deploying Audio Recorder to a new Raspberry Pi.
 
 ## Pre-Deployment
 
@@ -14,14 +14,13 @@ Use this checklist when deploying ILC Audio Recorder to a new Raspberry Pi.
 ### Software Preparation
 - [ ] Raspberry Pi OS Lite (64-bit) image downloaded
 - [ ] Raspberry Pi Imager installed on computer
-- [ ] Project files ready to transfer
 
 ## Initial Pi Setup
 
 ### OS Installation
 - [ ] Flash Raspberry Pi OS Lite to SD card
 - [ ] Configure SSH in Raspberry Pi Imager settings
-- [ ] Set hostname (e.g., `ilc-recorder`)
+- [ ] Set hostname (e.g., `audio-recorder`)
 - [ ] Configure WiFi credentials (if applicable)
 - [ ] Set username to `pi` and secure password
 - [ ] Set correct timezone
@@ -29,7 +28,7 @@ Use this checklist when deploying ILC Audio Recorder to a new Raspberry Pi.
 ### First Boot
 - [ ] Insert SD card and power on
 - [ ] Wait 2-3 minutes for initialization
-- [ ] Connect via SSH: `ssh pi@ilc-recorder.local`
+- [ ] Connect via SSH: `ssh pi@audio-recorder.local`
 - [ ] Verify OS version: `cat /etc/os-release`
 - [ ] Verify 64-bit: `uname -m` (should show `aarch64`)
 
@@ -40,48 +39,27 @@ Use this checklist when deploying ILC Audio Recorder to a new Raspberry Pi.
 - [ ] Run: `sudo apt upgrade -y`
 - [ ] Reboot: `sudo reboot`
 
-### Dependencies
-- [ ] Install: `sudo apt install -y python3-pip ffmpeg alsa-utils sqlite3`
-- [ ] Verify FFmpeg: `ffmpeg -version`
-- [ ] Verify Python: `python3 --version` (should be 3.11+)
+## Application Installation (Automated)
 
-### Hardware Verification
-- [ ] Plug in UCA202 USB cable
-- [ ] Run: `lsusb | grep Audio` (should show "Burr-Brown")
-- [ ] Run: `arecord -l` (should show card 1: CODEC)
+The `install.sh` script handles most installation steps automatically.
 
-## Application Installation
+### Clone and Install
+```bash
+cd ~
+git clone https://github.com/vilpter/ilc-Audio-Recorder.git audio-recorder
+cd audio-recorder
+./install.sh
+```
 
-### File Transfer
-- [ ] Upload project to `/home/pi/ilc-audio-recorder`
-- [ ] Verify all files present: `ls -la ~/ilc-audio-recorder`
-- [ ] Set execute permissions: `chmod +x ~/ilc-audio-recorder/*.py`
-
-### Python Dependencies
-- [ ] Navigate: `cd ~/ilc-audio-recorder`
-- [ ] Install: `pip3 install -r requirements.txt --break-system-packages`
-- [ ] Verify: `pip3 list | grep Flask`
-
-### ALSA Configuration
-- [ ] Copy config: `sudo cp configs/asound.conf /etc/asound.conf`
-- [ ] Reload ALSA: `sudo alsactl kill rescan`
-- [ ] Test recording (5 sec): `arecord -D hw:1 -f S16_LE -r 48000 -c 2 -d 5 test.wav`
-- [ ] Check file size: `ls -lh test.wav` (should be ~1.8MB)
-- [ ] Delete test: `rm test.wav`
-
-### Recordings Directory
-- [ ] Create: `mkdir -p ~/recordings`
-- [ ] Test write: `touch ~/recordings/test.txt && rm ~/recordings/test.txt`
-
-### Systemd Service
-- [ ] Create log dir: `sudo mkdir -p /var/log/ilc-audio-recorder`
-- [ ] Set ownership: `sudo chown pi:pi /var/log/ilc-audio-recorder`
-- [ ] Copy service: `sudo cp ilc-audio-recorder.service /etc/systemd/system/`
-- [ ] Reload daemon: `sudo systemctl daemon-reload`
-- [ ] Enable service: `sudo systemctl enable ilc-audio-recorder`
-- [ ] Start service: `sudo systemctl start ilc-audio-recorder`
-- [ ] Check status: `sudo systemctl status ilc-audio-recorder`
+### Verify Installation
+- [ ] Check service status: `sudo systemctl status audio-recorder`
 - [ ] Verify "active (running)" status
+- [ ] Check logs: `tail -20 /var/log/audio-recorder/app.log`
+
+### Manual Steps (if needed)
+If the installer encounters issues, use the helper scripts:
+- [ ] Audio issues: `./configure_audio.sh`
+- [ ] Service issues: `./fix_service.sh`
 
 ## Post-Installation Testing
 
@@ -89,32 +67,41 @@ Use this checklist when deploying ILC Audio Recorder to a new Raspberry Pi.
 - [ ] Get Pi IP: `hostname -I`
 - [ ] Open browser: `http://PI_IP_ADDRESS:5000`
 - [ ] Verify dashboard loads
-- [ ] Check disk space indicator shows
-- [ ] Status shows "IDLE"
+- [ ] Status shows "Idle"
 
 ### Page Verification
 - [ ] Test Dashboard (/) - loads without errors
 - [ ] Test Schedule (/schedule) - loads without errors
 - [ ] Test Calendar (/calendar) - loads without errors
-- [ ] Test Recordings (/recordings) - loads without errors
 - [ ] Test Templates (/templates) - loads without errors
+- [ ] Test Recordings (/recordings) - loads without errors
+- [ ] Test Settings (/settings) - loads without errors
 
 ### Functional Testing
 
 #### Manual Recording Test
 - [ ] Go to Dashboard
-- [ ] Set name: "test_recording"
-- [ ] Set duration: 5 minutes (300 seconds)
+- [ ] Set duration: 1 minute
 - [ ] Click "Start Recording"
-- [ ] Verify status changes to "RECORDING"
-- [ ] See recording details displayed
-- [ ] Wait 10 seconds
-- [ ] Click "Stop Recording"
+- [ ] Verify status changes to recording state
+- [ ] Wait for recording to complete (or click Stop)
 - [ ] Go to Recordings page
-- [ ] Verify `source_A_*.wav` and `source_B_*.wav` files exist
+- [ ] Verify `*_L.wav` and `*_R.wav` files exist
 - [ ] Download both files
 - [ ] Verify files play correctly
 - [ ] Delete test files
+
+#### Settings Test
+- [ ] Go to Settings page
+- [ ] Verify audio device detection works
+- [ ] Test filename configuration preview
+- [ ] Verify backup/restore buttons are present
+
+#### Calendar Click Test
+- [ ] Go to Calendar page
+- [ ] Click on a future day
+- [ ] Verify schedule creation modal appears
+- [ ] Close modal without saving
 
 #### Template Test
 - [ ] Go to Templates page
@@ -126,25 +113,18 @@ Use this checklist when deploying ILC Audio Recorder to a new Raspberry Pi.
 
 #### Schedule Test
 - [ ] Go to Schedule page
-- [ ] Load "Daily 1-Hour Recording" template
-- [ ] Verify fields populate
-- [ ] Create schedule
+- [ ] Create a test schedule
 - [ ] Verify job appears in list
 - [ ] Go to Calendar page
-- [ ] Verify recurring events show up
+- [ ] Verify event shows up
 - [ ] Return to Schedule page
 - [ ] Delete test schedule
-
-### Log Verification
-- [ ] Check app log: `tail -20 /var/log/ilc-audio-recorder/app.log`
-- [ ] Check error log: `tail -20 /var/log/ilc-audio-recorder/error.log`
-- [ ] Verify no critical errors
 
 ### Reboot Test
 - [ ] Reboot Pi: `sudo reboot`
 - [ ] Wait for boot
 - [ ] Reconnect SSH
-- [ ] Check service auto-started: `sudo systemctl status ilc-audio-recorder`
+- [ ] Check service auto-started: `sudo systemctl status audio-recorder`
 - [ ] Verify web UI accessible
 - [ ] Check schedules persisted (go to Schedule page)
 
@@ -158,21 +138,20 @@ Use this checklist when deploying ILC Audio Recorder to a new Raspberry Pi.
 
 ### Documentation
 - [ ] Note Pi's IP address or hostname
-- [ ] Document audio source connections (what's A, what's B)
-- [ ] Create backup of initial configuration
-- [ ] Print quick reference card for non-technical users
+- [ ] Document audio source connections (what's L, what's R)
+- [ ] Export initial configuration from Settings page
+- [ ] Store backup files safely
 
 ### Backup Strategy
-- [ ] Document recordings location: `/home/pi/recordings`
+- [ ] Document recordings location: `~/recordings`
+- [ ] Document database location: `~/.audio-recorder/`
+- [ ] Export schedules and config from Settings page
 - [ ] Set up external backup destination (if applicable)
-- [ ] Consider automated backup script
-- [ ] Document database locations: `~/ilc-audio-recorder/data/`
 
 ### Monitoring Setup
 - [ ] Add Pi to network monitoring (if available)
 - [ ] Document how to check service status
 - [ ] Create user guide for accessing web UI
-- [ ] Establish maintenance schedule
 
 ## Optional Configuration
 
@@ -181,15 +160,15 @@ Use this checklist when deploying ILC Audio Recorder to a new Raspberry Pi.
 - [ ] Configure DHCP reservation on router
 - [ ] Document assigned IP address
 
-### Performance Tuning
+### Custom Filename Configuration
+- [ ] Go to Settings page
+- [ ] Configure channel suffixes (L/R or custom)
+- [ ] Verify filename preview shows expected format
+
+### Performance Monitoring
 - [ ] Check CPU temperature: `vcgencmd measure_temp`
 - [ ] Ensure adequate cooling (add heatsink/fan if needed)
 - [ ] Monitor during first few recordings
-
-### Future Enhancements
-- [ ] Plan retention policy (auto-delete old files)
-- [ ] Consider external USB storage for recordings
-- [ ] Plan authentication implementation (Phase 2)
 
 ## Sign-Off
 
@@ -197,7 +176,6 @@ Use this checklist when deploying ILC Audio Recorder to a new Raspberry Pi.
 - **Date:** _______________
 - **Deployed By:** _______________
 - **Pi Model:** _______________
-- **Pi Serial:** _______________
 - **OS Version:** _______________
 - **Network Info:** _______________
 - **Location:** _______________
@@ -206,7 +184,7 @@ Use this checklist when deploying ILC Audio Recorder to a new Raspberry Pi.
 - [ ] All tests passed
 - [ ] Known issues documented: _______________
 - [ ] User training completed: _______________
-- [ ] Backup plan in place: _______________
+- [ ] Backup exported: _______________
 
 ### Notes
 ```
@@ -215,6 +193,6 @@ Use this checklist when deploying ILC Audio Recorder to a new Raspberry Pi.
 
 ---
 
-**Deployment Complete!** 🎉
+**Deployment Complete!**
 
-The ILC Audio Recorder is now ready for production use.
+The Audio Recorder is now ready for production use.
