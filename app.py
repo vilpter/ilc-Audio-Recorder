@@ -4,7 +4,8 @@ Headless Dual-Mono Audio Recording System
 Main Flask Application
 """
 
-from flask import Flask, render_template, jsonify, request, send_file
+from flask import Flask, render_template, jsonify, request, send_file, redirect, url_for, flash
+from flask_login import login_required, login_user, logout_user, current_user
 from pathlib import Path
 import json
 import subprocess
@@ -12,10 +13,20 @@ from datetime import datetime
 import recorder
 import scheduler
 import templates_manager
+import auth
 
 app = Flask(__name__)
 app.config['RECORDINGS_DIR'] = Path.home() / 'recordings'
 app.config['RECORDINGS_DIR'].mkdir(exist_ok=True)
+
+# Session configuration
+app.secret_key = auth.generate_secret_key()
+
+# Initialize Flask-Login
+auth.login_manager.init_app(app)
+
+# Initialize auth database
+auth.init_auth_db()
 
 # Global status tracker
 recording_status = {
@@ -25,13 +36,117 @@ recording_status = {
 }
 
 
+# ============================================================================
+# Authentication Routes
+# ============================================================================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page and authentication"""
+    # Redirect to setup if no users exist
+    if auth.needs_setup():
+        return redirect(url_for('setup'))
+
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        remember = request.form.get('remember', False)
+
+        user = auth.User.get_by_username(username)
+
+        if user and user.check_password(password):
+            login_user(user, remember=bool(remember))
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('index'))
+        else:
+            flash('Invalid username or password', 'error')
+
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Logout current user"""
+    logout_user()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    """Initial setup - create admin user"""
+    # Only allow setup if no users exist
+    if not auth.needs_setup():
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+
+        # Validation
+        errors = []
+        if not username or len(username) < 3:
+            errors.append('Username must be at least 3 characters')
+        if not password or len(password) < 6:
+            errors.append('Password must be at least 6 characters')
+        if password != confirm_password:
+            errors.append('Passwords do not match')
+
+        if errors:
+            for error in errors:
+                flash(error, 'error')
+        else:
+            user = auth.User.create(username, password)
+            if user:
+                flash('Admin account created successfully. Please log in.', 'success')
+                return redirect(url_for('login'))
+            else:
+                flash('Failed to create account', 'error')
+
+    return render_template('setup.html')
+
+
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    """Change current user's password"""
+    if request.method == 'POST':
+        current_password = request.form.get('current_password', '')
+        new_password = request.form.get('new_password', '')
+        confirm_password = request.form.get('confirm_password', '')
+
+        if not current_user.check_password(current_password):
+            flash('Current password is incorrect', 'error')
+        elif len(new_password) < 6:
+            flash('New password must be at least 6 characters', 'error')
+        elif new_password != confirm_password:
+            flash('New passwords do not match', 'error')
+        else:
+            auth.User.update_password(current_user.username, new_password)
+            flash('Password changed successfully', 'success')
+            return redirect(url_for('settings_page'))
+
+    return render_template('change_password.html')
+
+
+# ============================================================================
+# Protected Routes
+# ============================================================================
+
 @app.route('/')
+@login_required
 def index():
     """Dashboard - show current status and manual controls"""
     return render_template('index.html', status=recording_status)
 
 
 @app.route('/api/status')
+@login_required
 def get_status():
     """API endpoint for real-time status polling"""
     # Sync with actual recorder state to prevent desync
@@ -49,6 +164,7 @@ def get_status():
 
 
 @app.route('/api/record/start', methods=['POST'])
+@login_required
 def start_recording():
     """Manual recording start"""
     data = request.json
@@ -69,6 +185,7 @@ def start_recording():
 
 
 @app.route('/api/record/stop', methods=['POST'])
+@login_required
 def stop_recording():
     """Manual recording stop"""
     # Check actual recorder state, not cached status
@@ -86,6 +203,7 @@ def stop_recording():
 
 
 @app.route('/schedule')
+@login_required
 def schedule_page():
     """Scheduling interface"""
     jobs = scheduler.get_all_jobs()
@@ -93,6 +211,7 @@ def schedule_page():
 
 
 @app.route('/api/schedule', methods=['POST'])
+@login_required
 def create_schedule():
     """Create new scheduled recording"""
     data = request.json
@@ -113,6 +232,7 @@ def create_schedule():
 
 
 @app.route('/api/schedule/<job_id>', methods=['DELETE'])
+@login_required
 def delete_schedule(job_id):
     """Delete scheduled recording"""
     try:
@@ -123,6 +243,7 @@ def delete_schedule(job_id):
 
 
 @app.route('/recordings')
+@login_required
 def recordings_page():
     """File browser interface"""
     recordings_dir = app.config['RECORDINGS_DIR']
@@ -143,6 +264,7 @@ def recordings_page():
 
 
 @app.route('/api/recordings/<filename>')
+@login_required
 def download_file(filename):
     """Download a recording file"""
     file_path = app.config['RECORDINGS_DIR'] / filename
@@ -153,6 +275,7 @@ def download_file(filename):
 
 
 @app.route('/api/recordings/<filename>', methods=['DELETE'])
+@login_required
 def delete_file(filename):
     """Delete a recording file"""
     file_path = app.config['RECORDINGS_DIR'] / filename
@@ -168,6 +291,7 @@ def delete_file(filename):
 
 # Template Management Routes
 @app.route('/templates')
+@login_required
 def templates_page():
     """Template management interface"""
     templates = templates_manager.get_all_templates()
@@ -175,6 +299,7 @@ def templates_page():
 
 
 @app.route('/api/templates', methods=['GET'])
+@login_required
 def get_templates():
     """Get all templates"""
     templates = templates_manager.get_all_templates()
@@ -182,6 +307,7 @@ def get_templates():
 
 
 @app.route('/api/templates', methods=['POST'])
+@login_required
 def create_template():
     """Create new template"""
     data = request.json
@@ -198,6 +324,7 @@ def create_template():
 
 
 @app.route('/api/templates/<template_id>', methods=['GET'])
+@login_required
 def get_template(template_id):
     """Get specific template"""
     template = templates_manager.get_template(template_id)
@@ -207,6 +334,7 @@ def get_template(template_id):
 
 
 @app.route('/api/templates/<template_id>', methods=['PUT'])
+@login_required
 def update_template(template_id):
     """Update template"""
     data = request.json
@@ -224,6 +352,7 @@ def update_template(template_id):
 
 
 @app.route('/api/templates/<template_id>', methods=['DELETE'])
+@login_required
 def delete_template(template_id):
     """Delete template"""
     try:
@@ -235,6 +364,7 @@ def delete_template(template_id):
 
 # Filename Configuration Routes
 @app.route('/api/config/filename', methods=['GET'])
+@login_required
 def get_filename_config():
     """Get current filename configuration"""
     try:
@@ -260,6 +390,7 @@ def get_filename_config():
 
 
 @app.route('/api/config/filename', methods=['POST'])
+@login_required
 def save_filename_config():
     """Save filename configuration"""
     data = request.json
@@ -296,6 +427,7 @@ def save_filename_config():
 
 # Calendar View Route
 @app.route('/calendar')
+@login_required
 def calendar_page():
     """Multi-week calendar view"""
     # Get all scheduled jobs for calendar display
@@ -305,6 +437,7 @@ def calendar_page():
 
 # Settings Page Route
 @app.route('/settings')
+@login_required
 def settings_page():
     """System settings interface"""
     # Get current audio device config
@@ -314,6 +447,7 @@ def settings_page():
 
 # Audio Device Configuration API
 @app.route('/api/audio/devices', methods=['GET'])
+@login_required
 def get_audio_devices():
     """List available audio devices"""
     devices = recorder.get_available_audio_devices()
@@ -334,6 +468,7 @@ def get_audio_devices():
 
 
 @app.route('/api/audio/config', methods=['GET'])
+@login_required
 def get_audio_config():
     """Get current audio device configuration"""
     current_device = scheduler.get_system_config('audio_device', 'auto')
@@ -361,6 +496,7 @@ def get_audio_config():
 
 
 @app.route('/api/audio/config', methods=['POST'])
+@login_required
 def set_audio_config():
     """Set audio device configuration"""
     data = request.json
@@ -384,6 +520,7 @@ def set_audio_config():
 
 
 @app.route('/api/audio/test', methods=['POST'])
+@login_required
 def test_audio_device():
     """Test audio device with short recording"""
     data = request.json
@@ -442,6 +579,7 @@ def test_audio_device():
 
 # Log Viewer API
 @app.route('/api/logs', methods=['GET'])
+@login_required
 def get_logs():
     """Get application logs"""
     log_type = request.args.get('type', 'app')  # 'app' or 'error'
@@ -470,6 +608,7 @@ def get_logs():
 
 # Backup/Restore API Endpoints (Refactored)
 @app.route('/api/export/<export_type>', methods=['GET'])
+@login_required
 def export_data(export_type):
     """
     Export schedules or configuration as downloadable file
@@ -518,6 +657,7 @@ def export_data(export_type):
 
 
 @app.route('/api/import/<import_type>', methods=['POST'])
+@login_required
 def import_data(import_type):
     """
     Import schedules or configuration from uploaded file with auto-backup
@@ -617,6 +757,7 @@ def import_data(import_type):
 
 
 @app.route('/api/revert/<revert_type>', methods=['POST'])
+@login_required
 def revert_data(revert_type):
     """
     Revert to last backup before import
@@ -681,6 +822,7 @@ def revert_data(revert_type):
 
 
 @app.route('/api/revert/available', methods=['GET'])
+@login_required
 def check_revert_available():
     """Check if revert backups exist for schedules and/or config"""
     backup_dir = Path.home() / '.audio-recorder' / 'backups'

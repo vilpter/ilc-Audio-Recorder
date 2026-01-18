@@ -1,7 +1,7 @@
 # Audio Recorder - Future Enhancements Roadmap
 
-**Current Version:** v1.1.1  
-**Last Updated:** 2026-01-17
+**Current Version:** v1.3.0
+**Last Updated:** 2026-01-18
 
 ---
 
@@ -27,6 +27,13 @@
 - ✅ **Log viewer in web UI**
 - ✅ **Calendar click-to-create modal**
 
+### Phase 3 Security (v1.3.0)
+- ✅ **Basic Authentication** - Session-based login with Flask-Login
+- ✅ **Initial setup wizard** - Create admin account on first access
+- ✅ **Password management** - Change password functionality
+- ✅ **Remember me** - Persistent login sessions
+- ✅ **Route protection** - All endpoints require authentication
+
 ---
 
 ## Future Enhancements (Post-Testing Phase)
@@ -37,12 +44,12 @@ These features are consolidated from the original Phase 2 and Phase 3 plans. The
 
 ### 🔐 Security & User Management
 
-#### Basic Authentication (HIGH)
-- HTTP basic auth for web UI
-- Single admin username/password
-- Session management
-- Remember me functionality
-- **Benefit:** Secure deployment on shared networks
+#### ~~Basic Authentication~~ ✅ COMPLETED (v1.3.0)
+- ~~HTTP basic auth for web UI~~
+- ~~Single admin username/password~~
+- ~~Session management~~
+- ~~Remember me functionality~~
+- ~~**Benefit:** Secure deployment on shared networks~~
 
 #### User Preferences (MEDIUM)
 - Customizable default duration
@@ -315,10 +322,11 @@ Users can request features by:
 - **Real-time status:** Completed ahead of schedule in v1.1.1
 - **Audio config GUI:** Completed ahead of schedule in v1.1.1
 - **Recurring schedules:** Completed in Phase 1
+- **Basic Authentication:** Completed in v1.3.0 with Flask-Login session-based auth
 
 All estimates are rough and will be refined during implementation planning.
 
 ---
 
-**Status:** Living document, updated with each release  
-**Last Review:** v1.1.1 release
+**Status:** Living document, updated with each release
+**Last Review:** v1.3.0 release

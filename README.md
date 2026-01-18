@@ -30,6 +30,7 @@ A professional-grade dual-channel audio recording system with web-based scheduli
 - Live date/time display on all pages
 - Settings page with device configuration
 - Complete backup/restore system
+- User authentication with login/logout
 
 ### System
 - Auto-start service (systemd)
@@ -179,13 +180,17 @@ audio-recorder/
 ├── configs/
 │   ├── asound.conf           # ALSA configuration
 │   └── 85-usb-audio.rules    # udev rules for USB audio
+├── auth.py                   # Authentication module
 └── templates/                # HTML templates
     ├── index.html            # Dashboard
     ├── schedule.html         # Schedule manager
     ├── calendar.html         # Calendar view
     ├── recordings.html       # File browser
     ├── templates_mgmt.html   # Template manager
-    └── settings.html         # Settings page
+    ├── settings.html         # Settings page
+    ├── login.html            # Login page
+    ├── setup.html            # Initial setup
+    └── change_password.html  # Password change
 ```
 
 ## Recording File Format
@@ -298,16 +303,36 @@ curl http://localhost:5000
 | **Disk I/O** | 384 KB/s | Sustained write rate |
 | **File Size** | ~345 MB/hour | Per channel (WAV format) |
 
-## Security Notes
+## Security & Authentication
 
-- Designed for **local network use only**
-- No authentication implemented (Phase 2 feature)
-- Do not expose port 5000 to the internet
+### First-Time Setup
+On first access, you'll be prompted to create an admin account:
+1. Navigate to `http://<raspberry-pi-ip>:5000`
+2. Create username (min 3 characters) and password (min 6 characters)
+3. Log in with your new credentials
+
+### Authentication Features
+- Session-based authentication with Flask-Login
+- "Remember me" option for persistent sessions
+- Change password from Settings page
+- All routes protected - login required
+
+### Security Notes
+- Designed for **local network use**
 - For remote access, use SSH tunneling or VPN
+- Credentials stored with secure password hashing (Werkzeug)
+- Session secret key auto-generated and stored in `~/.audio-recorder/`
 
 ## Changelog
 
-### v1.2.0 (Current)
+### v1.3.0 (Current)
+- Added user authentication (login/logout)
+- Added initial setup wizard for admin account creation
+- Added change password functionality
+- Added "Remember me" persistent sessions
+- All routes now require authentication
+
+### v1.2.0
 - Fixed recording stop button error when recording already finished
 - Added live date/time clock in navigation bar
 - Added configurable recording filename format
@@ -327,16 +352,15 @@ See [RELEASE_NOTES_v1.2.0.md](RELEASE_NOTES_v1.2.0.md) for detailed changes.
 ## Roadmap
 
 ### Planned Features
-- Real-time status polling without page refresh
 - Disk space monitoring dashboard
 - Audio level meter preview
 - Optional post-processing (WAV → MP3/FLAC)
 - Email/webhook notifications
-- Basic authentication for web UI
+- Search & filter recordings
 
 ## Built With
 
-- **Backend:** Python 3.11+, Flask, APScheduler
+- **Backend:** Python 3.11+, Flask, Flask-Login, APScheduler
 - **Frontend:** HTML5, Tailwind CSS, Vanilla JavaScript
 - **Audio:** FFmpeg, ALSA
 - **Database:** SQLite3
@@ -348,5 +372,5 @@ See [RELEASE_NOTES_v1.2.0.md](RELEASE_NOTES_v1.2.0.md) for detailed changes.
 
 ---
 
-**Version:** 1.2.0
-**Last Updated:** 2026-01-17
+**Version:** 1.3.0
+**Last Updated:** 2026-01-18
