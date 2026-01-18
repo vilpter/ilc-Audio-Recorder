@@ -34,7 +34,7 @@ A professional-grade dual-channel audio recording system with web-based scheduli
 
 ### System
 - Auto-start service (systemd)
-- Automated installation script
+- Automated installation script with upgrade support
 - Automatic audio device detection
 - Schedule persistence across reboots
 - Export/import configuration and schedules
@@ -76,6 +76,10 @@ The installer handles:
 - Recordings directory
 - Systemd service setup
 - Log directories
+
+**Upgrading:** When run on an existing installation, the installer detects this and offers:
+1. **Fresh Install** - Overwrites all configuration
+2. **Upgrade** - Updates code while preserving your ALSA config, udev rules, and service customizations
 
 ## Installation (Manual)
 
