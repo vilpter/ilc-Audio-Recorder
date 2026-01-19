@@ -67,3 +67,4 @@ htmlcov/
 # Documentation builds
 docs/_build/
 site/
+CLAUDE.md

@@ -9,10 +9,10 @@ from flask_login import login_required, login_user, logout_user, current_user
 from pathlib import Path
 import json
 import subprocess
+import sqlite3
 from datetime import datetime
 import recorder
 import scheduler
-import templates_manager
 import auth
 
 app = Flask(__name__)
@@ -141,8 +141,9 @@ def change_password():
 @app.route('/')
 @login_required
 def index():
-    """Dashboard - show current status and manual controls"""
-    return render_template('index.html', status=recording_status)
+    """Calendar view - main landing page"""
+    jobs = scheduler.get_all_jobs()
+    return render_template('calendar.html', jobs=jobs)
 
 
 @app.route('/api/status')
@@ -223,7 +224,6 @@ def create_schedule():
             notes=data.get('notes', ''),
             is_recurring=data.get('is_recurring', False),
             recurrence_pattern=data.get('recurrence_pattern'),
-            template_id=data.get('template_id'),
             allow_override=data.get('allow_override', False)
         )
         return jsonify({'success': True, 'job_id': job_id})
@@ -284,79 +284,6 @@ def delete_file(filename):
     
     try:
         file_path.unlink()
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-# Template Management Routes
-@app.route('/templates')
-@login_required
-def templates_page():
-    """Template management interface"""
-    templates = templates_manager.get_all_templates()
-    return render_template('templates_mgmt.html', templates=templates)
-
-
-@app.route('/api/templates', methods=['GET'])
-@login_required
-def get_templates():
-    """Get all templates"""
-    templates = templates_manager.get_all_templates()
-    return jsonify(templates)
-
-
-@app.route('/api/templates', methods=['POST'])
-@login_required
-def create_template():
-    """Create new template"""
-    data = request.json
-    try:
-        template_id = templates_manager.create_template(
-            name=data['name'],
-            duration=data['duration'],
-            recurrence_pattern=data.get('recurrence_pattern'),
-            notes=data.get('notes', '')
-        )
-        return jsonify({'success': True, 'template_id': template_id})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/templates/<template_id>', methods=['GET'])
-@login_required
-def get_template(template_id):
-    """Get specific template"""
-    template = templates_manager.get_template(template_id)
-    if not template:
-        return jsonify({'error': 'Template not found'}), 404
-    return jsonify(template)
-
-
-@app.route('/api/templates/<template_id>', methods=['PUT'])
-@login_required
-def update_template(template_id):
-    """Update template"""
-    data = request.json
-    try:
-        templates_manager.update_template(
-            template_id=template_id,
-            name=data.get('name'),
-            duration=data.get('duration'),
-            recurrence_pattern=data.get('recurrence_pattern'),
-            notes=data.get('notes')
-        )
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/templates/<template_id>', methods=['DELETE'])
-@login_required
-def delete_template(template_id):
-    """Delete template"""
-    try:
-        templates_manager.delete_template(template_id)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -425,14 +352,12 @@ def save_filename_config():
         return jsonify({'error': str(e)}), 500
 
 
-# Calendar View Route
+# Calendar View Route (also accessible via /calendar for backwards compatibility)
 @app.route('/calendar')
 @login_required
 def calendar_page():
-    """Multi-week calendar view"""
-    # Get all scheduled jobs for calendar display
-    jobs = scheduler.get_all_jobs()
-    return render_template('calendar.html', jobs=jobs)
+    """Multi-week calendar view - redirects to root"""
+    return redirect(url_for('index'))
 
 
 # Settings Page Route
@@ -641,8 +566,9 @@ def export_data(export_type):
         cursor = conn.cursor()
         
         if export_type == 'schedules':
-            # Keep only schedules and templates
+            # Keep only schedules
             cursor.execute("DROP TABLE IF EXISTS system_config")
+            cursor.execute("DROP TABLE IF EXISTS recording_templates")
         else:  # config
             # Keep only system configuration
             cursor.execute("DROP TABLE IF EXISTS scheduled_jobs")
@@ -693,6 +619,7 @@ def import_data(import_type):
         cursor_backup = conn_backup.cursor()
         if import_type == 'schedules':
             cursor_backup.execute("DROP TABLE IF EXISTS system_config")
+            cursor_backup.execute("DROP TABLE IF EXISTS recording_templates")
         else:  # config
             cursor_backup.execute("DROP TABLE IF EXISTS scheduled_jobs")
             cursor_backup.execute("DROP TABLE IF EXISTS recording_templates")
@@ -714,27 +641,20 @@ def import_data(import_type):
         cursor_upload = conn_upload.cursor()
         
         if import_type == 'schedules':
-            # Clear and import schedules/templates
+            # Clear and import schedules
             cursor_main.execute("DELETE FROM scheduled_jobs")
-            cursor_main.execute("DELETE FROM recording_templates")
-            
+
             # Copy scheduled_jobs
             cursor_upload.execute("SELECT * FROM scheduled_jobs")
             for row in cursor_upload.fetchall():
                 placeholders = ','.join(['?' for _ in row])
                 cursor_main.execute(f"INSERT INTO scheduled_jobs VALUES ({placeholders})", row)
-            
-            # Copy recording_templates
-            cursor_upload.execute("SELECT * FROM recording_templates")
-            for row in cursor_upload.fetchall():
-                placeholders = ','.join(['?' for _ in row])
-                cursor_main.execute(f"INSERT INTO recording_templates VALUES ({placeholders})", row)
-            
+
             # Reload scheduler
             conn_main.commit()
             conn_upload.close()
             conn_main.close()
-            
+
             scheduler.scheduler.remove_all_jobs()
             scheduler.restore_jobs_on_startup()
         
@@ -781,24 +701,18 @@ def revert_data(revert_type):
         cursor_backup = conn_backup.cursor()
         
         if revert_type == 'schedules':
-            # Clear and restore schedules/templates
+            # Clear and restore schedules
             cursor_main.execute("DELETE FROM scheduled_jobs")
-            cursor_main.execute("DELETE FROM recording_templates")
-            
+
             cursor_backup.execute("SELECT * FROM scheduled_jobs")
             for row in cursor_backup.fetchall():
                 placeholders = ','.join(['?' for _ in row])
                 cursor_main.execute(f"INSERT INTO scheduled_jobs VALUES ({placeholders})", row)
-            
-            cursor_backup.execute("SELECT * FROM recording_templates")
-            for row in cursor_backup.fetchall():
-                placeholders = ','.join(['?' for _ in row])
-                cursor_main.execute(f"INSERT INTO recording_templates VALUES ({placeholders})", row)
-            
+
             conn_main.commit()
             conn_backup.close()
             conn_main.close()
-            
+
             # Reload scheduler
             scheduler.scheduler.remove_all_jobs()
             scheduler.restore_jobs_on_startup()

@@ -356,11 +356,26 @@ See [RELEASE_NOTES_v1.2.0.md](RELEASE_NOTES_v1.2.0.md) for detailed changes.
 ## Roadmap
 
 ### Planned Features
-- Disk space monitoring dashboard
-- Audio level meter preview
-- Optional post-processing (WAV → MP3/FLAC)
-- Email/webhook notifications
-- Search & filter recordings
+- Calendar - Event Details - Include a Delete button when event details of a selected recording are displayed.
+- Instead of a heading "Event Details" on the Calendar page when a scheduled recording is selected, display the name of the event as the heading.
+- Migrate fill-in date to the 'Create New Recording' window when clicking on a calendar day
+- Migrate the Recording Status and Quick Record secgtions from the settings page to the Schedule page
+- Add end times to recordings displayed on the schedule based on the start and durations [start - end]
+- Note the last date of download for files.
+- Add ability to batch select and download or delete multiple files.
+- Disk space monitoring dashboard in GUI top ribbon
+  -- Include an X of Y indication
+  -- Make the entire ribbon red and identify how many hours of recording space are available when > 10 hours with default recording settings.
+  -- Make entire ribbon red and identify when the next week of scheduled recordings would fill available space
+- Post-processing feature (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate option
+
+### Recently Completed
+- Date/time display added to Settings page ribbon
+- Templates feature eliminated throughout application
+- 4-hour recording checkbox replaced with dynamic red warning
+- Calendar is now the root URL (/)
+- Dashboard content migrated to Settings page
+- Navigation reordered: Calendar | Schedule | Recordings | Settings
 
 ## Built With
 
