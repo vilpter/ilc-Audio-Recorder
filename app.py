@@ -281,10 +281,78 @@ def delete_file(filename):
     file_path = app.config['RECORDINGS_DIR'] / filename
     if not file_path.exists():
         return jsonify({'error': 'File not found'}), 404
-    
+
     try:
         file_path.unlink()
         return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recordings/batch/delete', methods=['POST'])
+@login_required
+def batch_delete_files():
+    """Delete multiple recording files"""
+    data = request.json
+    files = data.get('files', [])
+
+    if not files:
+        return jsonify({'error': 'No files specified'}), 400
+
+    deleted = []
+    errors = []
+
+    for filename in files:
+        file_path = app.config['RECORDINGS_DIR'] / filename
+        if not file_path.exists():
+            errors.append(f'{filename}: not found')
+            continue
+
+        try:
+            file_path.unlink()
+            deleted.append(filename)
+        except Exception as e:
+            errors.append(f'{filename}: {str(e)}')
+
+    return jsonify({
+        'success': len(errors) == 0,
+        'deleted': deleted,
+        'errors': errors
+    })
+
+
+@app.route('/api/recordings/batch/download', methods=['POST'])
+@login_required
+def batch_download_files():
+    """Download multiple recording files as a zip archive"""
+    import zipfile
+    import tempfile
+    import io
+
+    data = request.json
+    files = data.get('files', [])
+
+    if not files:
+        return jsonify({'error': 'No files specified'}), 400
+
+    # Create zip file in memory
+    zip_buffer = io.BytesIO()
+
+    try:
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for filename in files:
+                file_path = app.config['RECORDINGS_DIR'] / filename
+                if file_path.exists() and file_path.is_file():
+                    zip_file.write(file_path, filename)
+
+        zip_buffer.seek(0)
+
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f'recordings-{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip'
+        )
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -740,11 +808,97 @@ def revert_data(revert_type):
 def check_revert_available():
     """Check if revert backups exist for schedules and/or config"""
     backup_dir = Path.home() / '.audio-recorder' / 'backups'
-    
+
     return jsonify({
         'schedules_available': (backup_dir / 'schedules.sched.last').exists(),
         'config_available': (backup_dir / 'config.conf.last').exists()
     })
+
+
+# ============================================================================
+# Disk Space Monitoring API
+# ============================================================================
+
+@app.route('/api/system/disk', methods=['GET'])
+@login_required
+def get_disk_space():
+    """
+    Get disk space information for the recordings directory.
+
+    Returns:
+        - total_gb: Total disk space in GB
+        - used_gb: Used disk space in GB
+        - free_gb: Free disk space in GB
+        - percent_used: Percentage of disk used
+        - hours_remaining: Estimated recording hours remaining
+        - low_space_warning: True if less than 10 hours of recording space
+        - scheduled_warning: True if scheduled recordings would fill disk
+    """
+    import shutil
+
+    recordings_dir = app.config['RECORDINGS_DIR']
+
+    try:
+        disk_usage = shutil.disk_usage(recordings_dir)
+
+        total_gb = disk_usage.total / (1024 ** 3)
+        used_gb = disk_usage.used / (1024 ** 3)
+        free_gb = disk_usage.free / (1024 ** 3)
+        percent_used = (disk_usage.used / disk_usage.total) * 100
+
+        # Calculate estimated recording hours remaining
+        # WAV at 48kHz, 16-bit, stereo = ~345 MB/hour per channel
+        # Dual mono = 2 channels = ~690 MB/hour total
+        mb_per_hour = 690
+        free_mb = disk_usage.free / (1024 ** 2)
+        hours_remaining = free_mb / mb_per_hour
+
+        # Low space warning if less than 10 hours of recording space
+        low_space_warning = hours_remaining < 10
+
+        # Check if scheduled recordings would fill disk
+        scheduled_warning = False
+        scheduled_hours = 0
+
+        try:
+            jobs = scheduler.get_all_jobs()
+            now = datetime.now()
+
+            for job in jobs:
+                if job.get('status') == 'pending':
+                    # Calculate hours for this job
+                    duration_hours = job.get('duration', 0) / 3600
+
+                    if job.get('is_recurring'):
+                        # For recurring jobs, estimate next 7 days worth
+                        scheduled_hours += duration_hours * 7
+                    else:
+                        # One-time job
+                        job_time = datetime.fromisoformat(job.get('start_time', ''))
+                        if job_time > now:
+                            scheduled_hours += duration_hours
+
+            # Warning if scheduled recordings would use more than available space
+            scheduled_warning = scheduled_hours > hours_remaining
+
+        except Exception as e:
+            # If we can't check scheduled jobs, just skip this warning
+            pass
+
+        return jsonify({
+            'success': True,
+            'total_gb': round(total_gb, 2),
+            'used_gb': round(used_gb, 2),
+            'free_gb': round(free_gb, 2),
+            'percent_used': round(percent_used, 1),
+            'hours_remaining': round(hours_remaining, 1),
+            'low_space_warning': low_space_warning,
+            'scheduled_warning': scheduled_warning,
+            'scheduled_hours': round(scheduled_hours, 1)
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

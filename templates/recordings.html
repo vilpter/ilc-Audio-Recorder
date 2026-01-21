@@ -20,6 +20,9 @@
                 <div id="current-datetime" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
                     Loading...
                 </div>
+                <div id="disk-space" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer" title="Click for details">
+                    <span id="disk-text">Loading...</span>
+                </div>
                 <div class="border-l border-blue-400 pl-4 flex items-center space-x-3">
                     <span class="text-sm">{{ current_user.username }}</span>
                     <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
@@ -32,8 +35,21 @@
         <div class="bg-white rounded-lg shadow-md p-6">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-semibold">Recorded Files</h2>
-                <div class="text-sm text-gray-600">
-                    Total: <span id="file-count">{{ files|length }}</span> files
+                <div class="flex items-center space-x-4">
+                    <div id="batch-actions" class="hidden space-x-2">
+                        <span id="selected-count" class="text-sm text-gray-600">0 selected</span>
+                        <button onclick="batchDownload()"
+                            class="bg-green-500 hover:bg-green-600 text-white text-sm px-3 py-1 rounded">
+                            Download Selected
+                        </button>
+                        <button onclick="batchDelete()"
+                            class="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded">
+                            Delete Selected
+                        </button>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        Total: <span id="file-count">{{ files|length }}</span> files
+                    </div>
                 </div>
             </div>
 
@@ -42,6 +58,10 @@
                 <table class="w-full">
                     <thead>
                         <tr class="border-b-2 border-gray-200">
+                            <th class="text-left p-3 text-gray-700 w-10">
+                                <input type="checkbox" id="select-all" onchange="toggleSelectAll()"
+                                    class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            </th>
                             <th class="text-left p-3 text-gray-700">Filename</th>
                             <th class="text-left p-3 text-gray-700">Size</th>
                             <th class="text-left p-3 text-gray-700">Modified</th>
@@ -51,7 +71,11 @@
                     </thead>
                     <tbody>
                         {% for file in files %}
-                        <tr class="border-b border-gray-100 hover:bg-gray-50" id="file-row-{{ loop.index }}">
+                        <tr class="border-b border-gray-100 hover:bg-gray-50" id="file-row-{{ loop.index }}" data-filename="{{ file.name }}">
+                            <td class="p-3">
+                                <input type="checkbox" class="file-checkbox w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    data-filename="{{ file.name }}" onchange="updateSelection()">
+                            </td>
                             <td class="p-3">
                                 <span class="font-mono text-sm">{{ file.name }}</span>
                             </td>
@@ -132,6 +156,172 @@
         updateDateTime();
         setInterval(updateDateTime, 1000);
 
+        // Disk space monitoring
+        async function updateDiskSpace() {
+            try {
+                const response = await fetch('/api/system/disk');
+                const data = await response.json();
+
+                if (data.error) {
+                    document.getElementById('disk-text').textContent = 'Disk: Error';
+                    return;
+                }
+
+                const diskSpace = document.getElementById('disk-space');
+                const diskText = document.getElementById('disk-text');
+
+                // Format display: "X.X GB / Y.Y GB"
+                diskText.textContent = `${data.used_gb} / ${data.total_gb} GB`;
+
+                // Set title with more details
+                diskSpace.title = `Used: ${data.used_gb} GB of ${data.total_gb} GB (${data.percent_used}%)\n` +
+                    `Free: ${data.free_gb} GB\n` +
+                    `Recording time remaining: ~${data.hours_remaining} hours`;
+
+                // Warning states
+                if (data.low_space_warning || data.scheduled_warning) {
+                    diskSpace.className = 'text-sm font-mono bg-red-600 px-3 py-1 rounded cursor-pointer animate-pulse';
+                    if (data.scheduled_warning) {
+                        diskSpace.title += `\n\nWARNING: Scheduled recordings (${data.scheduled_hours} hrs) may exceed available space!`;
+                    } else {
+                        diskSpace.title += '\n\nWARNING: Less than 10 hours of recording space remaining!';
+                    }
+                } else if (data.hours_remaining < 24) {
+                    // Yellow warning for less than 24 hours
+                    diskSpace.className = 'text-sm font-mono bg-yellow-600 px-3 py-1 rounded cursor-pointer';
+                } else {
+                    diskSpace.className = 'text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer';
+                }
+
+            } catch (error) {
+                console.error('Error fetching disk space:', error);
+                document.getElementById('disk-text').textContent = 'Disk: --';
+            }
+        }
+
+        // Update disk space immediately and every 30 seconds
+        updateDiskSpace();
+        setInterval(updateDiskSpace, 30000);
+
+        // Selection management
+        function getSelectedFiles() {
+            const checkboxes = document.querySelectorAll('.file-checkbox:checked');
+            return Array.from(checkboxes).map(cb => cb.dataset.filename);
+        }
+
+        function updateSelection() {
+            const selected = getSelectedFiles();
+            const batchActions = document.getElementById('batch-actions');
+            const selectedCount = document.getElementById('selected-count');
+            const selectAll = document.getElementById('select-all');
+            const allCheckboxes = document.querySelectorAll('.file-checkbox');
+
+            if (selected.length > 0) {
+                batchActions.classList.remove('hidden');
+                selectedCount.textContent = `${selected.length} selected`;
+            } else {
+                batchActions.classList.add('hidden');
+            }
+
+            // Update select-all checkbox state
+            if (allCheckboxes.length > 0) {
+                selectAll.checked = selected.length === allCheckboxes.length;
+                selectAll.indeterminate = selected.length > 0 && selected.length < allCheckboxes.length;
+            }
+        }
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('select-all');
+            const checkboxes = document.querySelectorAll('.file-checkbox');
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+            updateSelection();
+        }
+
+        async function batchDownload() {
+            const selected = getSelectedFiles();
+            if (selected.length === 0) return;
+
+            if (selected.length === 1) {
+                // Single file - direct download
+                window.location.href = `/api/recordings/${selected[0]}`;
+                return;
+            }
+
+            // Multiple files - download as zip
+            try {
+                const response = await fetch('/api/recordings/batch/download', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ files: selected })
+                });
+
+                if (!response.ok) {
+                    const result = await response.json();
+                    alert('Error: ' + (result.error || 'Download failed'));
+                    return;
+                }
+
+                // Download the zip file
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `recordings-${new Date().toISOString().slice(0,10)}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            } catch (error) {
+                alert('Error downloading files: ' + error);
+            }
+        }
+
+        async function batchDelete() {
+            const selected = getSelectedFiles();
+            if (selected.length === 0) return;
+
+            const confirmMsg = selected.length === 1
+                ? `Delete ${selected[0]}?`
+                : `Delete ${selected.length} selected files?`;
+
+            if (!confirm(confirmMsg)) return;
+
+            try {
+                const response = await fetch('/api/recordings/batch/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ files: selected })
+                });
+
+                const result = await response.json();
+
+                if (result.error) {
+                    alert('Error: ' + result.error);
+                } else {
+                    // Remove deleted rows from table
+                    selected.forEach(filename => {
+                        const row = document.querySelector(`tr[data-filename="${filename}"]`);
+                        if (row) row.remove();
+                    });
+
+                    // Update file count
+                    const countElem = document.getElementById('file-count');
+                    const newCount = parseInt(countElem.textContent) - selected.length;
+                    countElem.textContent = newCount;
+
+                    // Reset selection UI
+                    document.getElementById('select-all').checked = false;
+                    updateSelection();
+
+                    // Reload if no files left
+                    if (newCount === 0) {
+                        location.reload();
+                    }
+                }
+            } catch (error) {
+                alert('Error deleting files: ' + error);
+            }
+        }
 
         async function deleteFile(filename, rowIndex) {
             if (!confirm(`Delete ${filename}?`)) return;

@@ -20,6 +20,9 @@
                 <div id="current-datetime" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
                     Loading...
                 </div>
+                <div id="disk-space" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer" title="Click for details">
+                    <span id="disk-text">Loading...</span>
+                </div>
                 <div class="border-l border-blue-400 pl-4 flex items-center space-x-3">
                     <span class="text-sm">{{ current_user.username }}</span>
                     <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
@@ -67,7 +70,7 @@
 
         <!-- Selected Event Details -->
         <div id="event-details" class="hidden mt-6 bg-white rounded-lg shadow-md p-6">
-            <h3 class="text-xl font-semibold mb-4">Event Details</h3>
+            <h3 id="event-details-heading" class="text-xl font-semibold mb-4">Event Details</h3>
             <div id="event-info"></div>
         </div>
 
@@ -205,9 +208,77 @@
         updateDateTime();
         setInterval(updateDateTime, 1000);
 
+        // Disk space monitoring
+        async function updateDiskSpace() {
+            try {
+                const response = await fetch('/api/system/disk');
+                const data = await response.json();
+
+                if (data.error) {
+                    document.getElementById('disk-text').textContent = 'Disk: Error';
+                    return;
+                }
+
+                const diskSpace = document.getElementById('disk-space');
+                const diskText = document.getElementById('disk-text');
+
+                // Format display: "X.X GB / Y.Y GB"
+                diskText.textContent = `${data.used_gb} / ${data.total_gb} GB`;
+
+                // Set title with more details
+                diskSpace.title = `Used: ${data.used_gb} GB of ${data.total_gb} GB (${data.percent_used}%)\n` +
+                    `Free: ${data.free_gb} GB\n` +
+                    `Recording time remaining: ~${data.hours_remaining} hours`;
+
+                // Warning states
+                if (data.low_space_warning || data.scheduled_warning) {
+                    diskSpace.className = 'text-sm font-mono bg-red-600 px-3 py-1 rounded cursor-pointer animate-pulse';
+                    if (data.scheduled_warning) {
+                        diskSpace.title += `\n\nWARNING: Scheduled recordings (${data.scheduled_hours} hrs) may exceed available space!`;
+                    } else {
+                        diskSpace.title += '\n\nWARNING: Less than 10 hours of recording space remaining!';
+                    }
+                } else if (data.hours_remaining < 24) {
+                    // Yellow warning for less than 24 hours
+                    diskSpace.className = 'text-sm font-mono bg-yellow-600 px-3 py-1 rounded cursor-pointer';
+                } else {
+                    diskSpace.className = 'text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer';
+                }
+
+            } catch (error) {
+                console.error('Error fetching disk space:', error);
+                document.getElementById('disk-text').textContent = 'Disk: --';
+            }
+        }
+
+        // Update disk space immediately and every 30 seconds
+        updateDiskSpace();
+        setInterval(updateDiskSpace, 30000);
 
         let currentDate = new Date();
         let allJobs = {{ jobs | tojson | safe }};
+
+        // Format time range for calendar cells (compact: "10:00 AM - 11:30 AM")
+        function formatTimeRangeShort(startTimeStr, durationSeconds) {
+            const startTime = new Date(startTimeStr);
+            const endTime = new Date(startTime.getTime() + durationSeconds * 1000);
+            const formatOptions = { hour: '2-digit', minute: '2-digit', hour12: true };
+            const startFormatted = startTime.toLocaleTimeString('en-US', formatOptions);
+            const endFormatted = endTime.toLocaleTimeString('en-US', formatOptions);
+            return `${startFormatted} - ${endFormatted}`;
+        }
+
+        // Format time range for event details (full: "Jan 20, 2026, 10:00 AM - 11:30 AM")
+        function formatTimeRangeFull(startTimeStr, durationSeconds) {
+            const startTime = new Date(startTimeStr);
+            const endTime = new Date(startTime.getTime() + durationSeconds * 1000);
+            const formatOptions = { hour: '2-digit', minute: '2-digit', hour12: true };
+            const dateOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+            const dateFormatted = startTime.toLocaleDateString('en-US', dateOptions);
+            const startFormatted = startTime.toLocaleTimeString('en-US', formatOptions);
+            const endFormatted = endTime.toLocaleTimeString('en-US', formatOptions);
+            return `${dateFormatted}, ${startFormatted} - ${endFormatted}`;
+        }
 
         function renderCalendar() {
             const container = document.getElementById('calendar-container');
@@ -246,10 +317,10 @@
                                        event.status === 'completed' ? 'bg-green-200 border-green-400' : 
                                        'bg-blue-200 border-blue-400';
                         
-                        html += `<div class="${bgColor} border rounded px-2 py-1 mb-1 text-xs cursor-pointer hover:opacity-80" 
+                        html += `<div class="${bgColor} border rounded px-2 py-1 mb-1 text-xs cursor-pointer hover:opacity-80"
                                      onclick='event.stopPropagation(); showEventDetails(${JSON.stringify(event)})'>`;
                         html += `<div class="font-semibold truncate">${event.name}</div>`;
-                        html += `<div>${new Date(event.start_time).toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'})}</div>`;
+                        html += `<div>${formatTimeRangeShort(event.start_time, event.duration)}</div>`;
                         html += `</div>`;
                     });
                     
@@ -310,7 +381,10 @@
 
         function showEventDetails(event) {
             const detailsDiv = document.getElementById('event-details');
+            const headingEl = document.getElementById('event-details-heading');
             const infoDiv = document.getElementById('event-info');
+
+            headingEl.textContent = event.name;
             
             let recurrenceInfo = '';
             if (event.is_recurring && event.recurrence_pattern) {
@@ -332,8 +406,7 @@
             
             infoDiv.innerHTML = `
                 <div class="space-y-2">
-                    <div><strong>Name:</strong> ${event.name}</div>
-                    <div><strong>Start Time:</strong> ${new Date(event.start_time).toLocaleString()}</div>
+                    <div><strong>Time:</strong> ${formatTimeRangeFull(event.start_time, event.duration)}</div>
                     <div><strong>Duration:</strong> ${event.duration / 60} minutes</div>
                     <div><strong>Status:</strong> <span class="font-semibold ${
                         event.status === 'pending' ? 'text-blue-600' :
@@ -343,10 +416,13 @@
                     ${recurrenceInfo ? `<div><strong>Recurrence:</strong> ${recurrenceInfo}</div>` : ''}
                     ${event.notes ? `<div><strong>Notes:</strong> ${event.notes}</div>` : ''}
                     ${event.status === 'pending' ? `
-                        <div class="mt-4">
+                        <div class="mt-4 flex space-x-2">
                             <a href="/schedule" class="inline-block bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
                                 Edit in Schedule
                             </a>
+                            <button onclick="deleteEvent('${event.id}')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">
+                                Delete
+                            </button>
                         </div>
                     ` : ''}
                 </div>
@@ -476,6 +552,28 @@
                 }
             } catch (error) {
                 alert('Error creating schedule: ' + error);
+            }
+        }
+
+        async function deleteEvent(jobId) {
+            if (!confirm('Are you sure you want to delete this scheduled recording?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/schedule/${jobId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.error) {
+                    alert('Error: ' + result.error);
+                } else {
+                    location.reload(); // Refresh to remove deleted event
+                }
+            } catch (error) {
+                alert('Error deleting schedule: ' + error);
             }
         }
 

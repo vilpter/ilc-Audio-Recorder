@@ -20,6 +20,9 @@
                 <div id="current-datetime" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
                     Loading...
                 </div>
+                <div id="disk-space" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer" title="Click for details">
+                    <span id="disk-text">Loading...</span>
+                </div>
                 <div class="border-l border-blue-400 pl-4 flex items-center space-x-3">
                     <span class="text-sm">{{ current_user.username }}</span>
                     <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
@@ -161,8 +164,71 @@
         updateDateTime();
         setInterval(updateDateTime, 1000);
 
+        // Disk space monitoring
+        async function updateDiskSpace() {
+            try {
+                const response = await fetch('/api/system/disk');
+                const data = await response.json();
+
+                if (data.error) {
+                    document.getElementById('disk-text').textContent = 'Disk: Error';
+                    return;
+                }
+
+                const diskSpace = document.getElementById('disk-space');
+                const diskText = document.getElementById('disk-text');
+
+                // Format display: "X.X GB / Y.Y GB"
+                diskText.textContent = `${data.used_gb} / ${data.total_gb} GB`;
+
+                // Set title with more details
+                diskSpace.title = `Used: ${data.used_gb} GB of ${data.total_gb} GB (${data.percent_used}%)\n` +
+                    `Free: ${data.free_gb} GB\n` +
+                    `Recording time remaining: ~${data.hours_remaining} hours`;
+
+                // Warning states
+                if (data.low_space_warning || data.scheduled_warning) {
+                    diskSpace.className = 'text-sm font-mono bg-red-600 px-3 py-1 rounded cursor-pointer animate-pulse';
+                    if (data.scheduled_warning) {
+                        diskSpace.title += `\n\nWARNING: Scheduled recordings (${data.scheduled_hours} hrs) may exceed available space!`;
+                    } else {
+                        diskSpace.title += '\n\nWARNING: Less than 10 hours of recording space remaining!';
+                    }
+                } else if (data.hours_remaining < 24) {
+                    // Yellow warning for less than 24 hours
+                    diskSpace.className = 'text-sm font-mono bg-yellow-600 px-3 py-1 rounded cursor-pointer';
+                } else {
+                    diskSpace.className = 'text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer';
+                }
+
+            } catch (error) {
+                console.error('Error fetching disk space:', error);
+                document.getElementById('disk-text').textContent = 'Disk: --';
+            }
+        }
+
+        // Update disk space immediately and every 30 seconds
+        updateDiskSpace();
+        setInterval(updateDiskSpace, 30000);
+
         // Set minimum datetime to now
         document.getElementById('start-time').min = new Date().toISOString().slice(0, 16);
+
+        // Format time range as "10:00 AM - 11:30 AM"
+        function formatTimeRange(startTimeStr, durationSeconds) {
+            const startTime = new Date(startTimeStr);
+            const endTime = new Date(startTime.getTime() + durationSeconds * 1000);
+
+            const formatOptions = { hour: '2-digit', minute: '2-digit', hour12: true };
+            const startFormatted = startTime.toLocaleTimeString('en-US', formatOptions);
+            const endFormatted = endTime.toLocaleTimeString('en-US', formatOptions);
+
+            // Also include the date for one-time jobs
+            const dateOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+            const dateFormatted = startTime.toLocaleDateString('en-US', dateOptions);
+
+            return `${dateFormatted}, ${startFormatted} - ${endFormatted}`;
+        }
 
         function checkDurationWarning() {
             const duration = parseInt(document.getElementById('duration').value) || 0;
@@ -294,7 +360,7 @@
                             {% if job.is_recurring %}
                                 Pattern: {{ job.recurrence_pattern }} |
                             {% else %}
-                                Starts: {{ job.start_time }} |
+                                ${formatTimeRange('{{ job.start_time }}', {{ job.duration }})} |
                             {% endif %}
                             Duration: {{ job.duration // 60 }} minutes |
                             Status: <span class="font-medium
