@@ -189,7 +189,6 @@ Report issues: [GitHub Issues](https://github.com/vilpter/ilc-Audio-Recorder/iss
 
 ## 🙏 Acknowledgments
 
-- **Development:** Claude (Anthropic)
 - **Testing:** User feedback and field testing
 - **Platform:** Raspberry Pi Foundation
 - **Audio Processing:** FFmpeg project

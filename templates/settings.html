@@ -8,28 +8,66 @@
 </head>
 <body class="bg-gray-100 min-h-screen">
     <nav class="bg-blue-600 text-white p-4 shadow-lg">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold">Audio Recorder</h1>
-            <div class="flex items-center space-x-6">
-                <div class="space-x-4">
-                    <a href="/" class="hover:underline">Calendar</a>
-                    <a href="/schedule" class="hover:underline">Schedule</a>
-                    <a href="/recordings" class="hover:underline">Recordings</a>
-                    <a href="/settings" class="hover:underline font-semibold">Settings</a>
+        <div class="container mx-auto">
+            <!-- Mobile header -->
+            <div class="flex justify-between items-center">
+                <h1 class="text-xl md:text-2xl font-bold">Audio Recorder</h1>
+
+                <!-- Mobile menu button -->
+                <button id="mobile-menu-btn" class="md:hidden p-2 rounded hover:bg-blue-700" onclick="toggleMobileMenu()">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+
+                <!-- Desktop navigation -->
+                <div class="hidden md:flex items-center space-x-4 lg:space-x-6">
+                    <div class="space-x-3 lg:space-x-4">
+                        <a href="/" class="hover:underline">Calendar</a>
+                        <a href="/schedule" class="hover:underline">Schedule</a>
+                        <a href="/recordings" class="hover:underline">Recordings</a>
+                        <a href="/settings" class="hover:underline font-semibold">Settings</a>
+                    </div>
+                    <div id="current-datetime" class="hidden lg:block text-sm font-mono bg-blue-700 px-3 py-1 rounded">
+                        Loading...
+                    </div>
+                    <div id="disk-space" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer" title="Click for details">
+                        <span id="disk-text">Loading...</span>
+                    </div>
+                    <div class="border-l border-blue-400 pl-3 lg:pl-4 flex items-center space-x-2 lg:space-x-3">
+                        <span class="text-sm hidden lg:inline">{{ current_user.username }}</span>
+                        <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
+                    </div>
                 </div>
-                <div id="current-datetime" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
-                    Loading...
+            </div>
+
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="hidden md:hidden mt-4 pt-4 border-t border-blue-500">
+                <div class="flex flex-col space-y-3">
+                    <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded">Calendar</a>
+                    <a href="/schedule" class="hover:bg-blue-700 px-3 py-2 rounded">Schedule</a>
+                    <a href="/recordings" class="hover:bg-blue-700 px-3 py-2 rounded">Recordings</a>
+                    <a href="/settings" class="hover:bg-blue-700 px-3 py-2 rounded font-semibold">Settings</a>
                 </div>
-                <div id="disk-space" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer" title="Click for details">
-                    <span id="disk-text">Loading...</span>
-                </div>
-                <div class="border-l border-blue-400 pl-4 flex items-center space-x-3">
-                    <span class="text-sm">{{ current_user.username }}</span>
-                    <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
+                <div class="mt-4 pt-4 border-t border-blue-500 flex flex-wrap gap-2">
+                    <div id="disk-space-mobile" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
+                        <span id="disk-text-mobile">Loading...</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm">{{ current_user.username }}</span>
+                        <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
+                    </div>
                 </div>
             </div>
         </div>
     </nav>
+
+    <script>
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+    </script>
 
     <div class="container mx-auto p-6">
         <!-- Recording Status & Quick Record -->
@@ -136,20 +174,20 @@
             </div>
             
             <!-- Action buttons -->
-            <div class="flex space-x-3">
-                <button onclick="testAudioDevice()" 
-                    class="bg-green-500 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded">
-                    Test Selected Device (3 sec)
+            <div class="flex flex-wrap gap-2 sm:gap-3">
+                <button onclick="testAudioDevice()"
+                    class="bg-green-500 hover:bg-green-600 text-white font-semibold px-3 sm:px-4 py-2 rounded text-sm sm:text-base">
+                    Test Device (3 sec)
                 </button>
-                
-                <button onclick="saveAudioConfig()" 
-                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded">
+
+                <button onclick="saveAudioConfig()"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-3 sm:px-4 py-2 rounded text-sm sm:text-base">
                     Save Configuration
                 </button>
-                
-                <button onclick="refreshDevices()" 
-                    class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-4 py-2 rounded">
-                    Refresh Devices
+
+                <button onclick="refreshDevices()"
+                    class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-3 sm:px-4 py-2 rounded text-sm sm:text-base">
+                    Refresh
                 </button>
             </div>
         </div>
@@ -202,14 +240,14 @@
             <!-- Export Section -->
             <div class="mb-6">
                 <h3 class="font-semibold text-gray-700 mb-3">Export / Backup</h3>
-                <div class="flex flex-wrap gap-3">
+                <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
                     <button onclick="exportSchedules()"
-                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm sm:text-base">
                         Export Schedules (.sched)
                     </button>
                     <button onclick="exportConfig()"
-                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
-                        Export System Configuration (.conf)
+                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm sm:text-base">
+                        Export Config (.conf)
                     </button>
                 </div>
             </div>
@@ -219,49 +257,49 @@
                 <h3 class="font-semibold text-gray-700 mb-3">Restore Schedules</h3>
                 <p class="text-sm text-gray-600 mb-3">
                     Upload a .sched file to restore schedules.
-                    <span class="text-red-600 font-semibold">Warning: This will overwrite all current schedules!</span>
+                    <span class="text-red-600 font-semibold block sm:inline">Warning: This will overwrite all current schedules!</span>
                 </p>
-                <div class="flex items-center gap-3">
-                    <input type="file" id="schedules-file" accept=".sched" 
-                        class="border rounded px-3 py-2">
-                    <button onclick="importSchedules()" 
-                        class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded">
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                    <input type="file" id="schedules-file" accept=".sched"
+                        class="border rounded px-3 py-2 text-sm w-full sm:w-auto">
+                    <button onclick="importSchedules()"
+                        class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded text-sm sm:text-base whitespace-nowrap">
                         Restore Schedules
                     </button>
                 </div>
             </div>
-            
+
             <!-- Restore Configuration -->
             <div class="mb-6 border-t pt-4">
                 <h3 class="font-semibold text-gray-700 mb-3">Restore System Configuration</h3>
                 <p class="text-sm text-gray-600 mb-3">
                     Upload a .conf file to restore system configuration.
-                    <span class="text-red-600 font-semibold">Warning: This will overwrite all current settings!</span>
+                    <span class="text-red-600 font-semibold block sm:inline">Warning: This will overwrite all current settings!</span>
                 </p>
-                <div class="flex items-center gap-3">
-                    <input type="file" id="config-file" accept=".conf" 
-                        class="border rounded px-3 py-2">
-                    <button onclick="importConfig()" 
-                        class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded">
-                        Restore Configuration
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                    <input type="file" id="config-file" accept=".conf"
+                        class="border rounded px-3 py-2 text-sm w-full sm:w-auto">
+                    <button onclick="importConfig()"
+                        class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded text-sm sm:text-base whitespace-nowrap">
+                        Restore Config
                     </button>
                 </div>
             </div>
-            
+
             <!-- Quick Revert -->
             <div class="border-t pt-4">
                 <h3 class="font-semibold text-gray-700 mb-3">Quick Revert (Undo Last Restore)</h3>
                 <p class="text-sm text-gray-600 mb-3">
                     Quickly restore to the state before your last import.
                 </p>
-                <div class="flex gap-3">
+                <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
                     <button id="revert-schedules-btn" onclick="revertSchedules()" disabled
-                        class="bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed disabled:opacity-50">
-                        Revert to Last Schedules
+                        class="bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed disabled:opacity-50 text-sm sm:text-base">
+                        Revert Schedules
                     </button>
                     <button id="revert-config-btn" onclick="revertConfig()" disabled
-                        class="bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed disabled:opacity-50">
-                        Revert to Last Configuration
+                        class="bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed disabled:opacity-50 text-sm sm:text-base">
+                        Revert Config
                     </button>
                 </div>
                 <p class="text-xs text-gray-500 mt-2">
@@ -346,38 +384,42 @@
 
                 if (data.error) {
                     document.getElementById('disk-text').textContent = 'Disk: Error';
+                    const mobileText = document.getElementById('disk-text-mobile');
+                    if (mobileText) mobileText.textContent = 'Disk: Error';
                     return;
                 }
 
                 const diskSpace = document.getElementById('disk-space');
                 const diskText = document.getElementById('disk-text');
+                const diskSpaceMobile = document.getElementById('disk-space-mobile');
+                const diskTextMobile = document.getElementById('disk-text-mobile');
 
                 // Format display: "X.X GB / Y.Y GB"
-                diskText.textContent = `${data.used_gb} / ${data.total_gb} GB`;
+                const displayText = `${data.used_gb} / ${data.total_gb} GB`;
+                diskText.textContent = displayText;
+                if (diskTextMobile) diskTextMobile.textContent = displayText;
 
                 // Set title with more details
                 diskSpace.title = `Used: ${data.used_gb} GB of ${data.total_gb} GB (${data.percent_used}%)\n` +
                     `Free: ${data.free_gb} GB\n` +
                     `Recording time remaining: ~${data.hours_remaining} hours`;
 
-                // Warning states
+                // Determine class based on warning state
+                let className = 'text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer';
                 if (data.low_space_warning || data.scheduled_warning) {
-                    diskSpace.className = 'text-sm font-mono bg-red-600 px-3 py-1 rounded cursor-pointer animate-pulse';
-                    if (data.scheduled_warning) {
-                        diskSpace.title += `\n\nWARNING: Scheduled recordings (${data.scheduled_hours} hrs) may exceed available space!`;
-                    } else {
-                        diskSpace.title += '\n\nWARNING: Less than 10 hours of recording space remaining!';
-                    }
+                    className = 'text-sm font-mono bg-red-600 px-3 py-1 rounded cursor-pointer animate-pulse';
                 } else if (data.hours_remaining < 24) {
-                    // Yellow warning for less than 24 hours
-                    diskSpace.className = 'text-sm font-mono bg-yellow-600 px-3 py-1 rounded cursor-pointer';
-                } else {
-                    diskSpace.className = 'text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer';
+                    className = 'text-sm font-mono bg-yellow-600 px-3 py-1 rounded cursor-pointer';
                 }
+
+                diskSpace.className = className;
+                if (diskSpaceMobile) diskSpaceMobile.className = className;
 
             } catch (error) {
                 console.error('Error fetching disk space:', error);
                 document.getElementById('disk-text').textContent = 'Disk: --';
+                const mobileText = document.getElementById('disk-text-mobile');
+                if (mobileText) mobileText.textContent = 'Disk: --';
             }
         }
 

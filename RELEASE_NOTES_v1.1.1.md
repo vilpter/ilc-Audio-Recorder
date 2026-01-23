@@ -303,8 +303,7 @@ A: Settings → Log Viewer (or `/var/log/audio-recorder/`)
 
 ## Credits
 
-**Development:** Claude (Anthropic)  
-**Testing & Feedback:** User community  
+**Testing & Feedback:** User community
 **Platform:** Raspberry Pi Foundation
 
 ---

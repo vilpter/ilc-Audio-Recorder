@@ -246,8 +246,7 @@ python3 app.py
 
 ## Credits
 
-**Development:** Claude (Anthropic)  
-**Testing:** User feedback and field testing  
+**Testing:** User feedback and field testing
 **Platform:** Raspberry Pi Foundation
 
 ---

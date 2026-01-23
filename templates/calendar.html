@@ -8,41 +8,79 @@
 </head>
 <body class="bg-gray-100 min-h-screen">
     <nav class="bg-blue-600 text-white p-4 shadow-lg">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold">Audio Recorder</h1>
-            <div class="flex items-center space-x-6">
-                <div class="space-x-4">
-                    <a href="/" class="hover:underline font-semibold">Calendar</a>
-                    <a href="/schedule" class="hover:underline">Schedule</a>
-                    <a href="/recordings" class="hover:underline">Recordings</a>
-                    <a href="/settings" class="hover:underline">Settings</a>
+        <div class="container mx-auto">
+            <!-- Mobile header -->
+            <div class="flex justify-between items-center">
+                <h1 class="text-xl md:text-2xl font-bold">Audio Recorder</h1>
+
+                <!-- Mobile menu button -->
+                <button id="mobile-menu-btn" class="md:hidden p-2 rounded hover:bg-blue-700" onclick="toggleMobileMenu()">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+
+                <!-- Desktop navigation -->
+                <div class="hidden md:flex items-center space-x-4 lg:space-x-6">
+                    <div class="space-x-3 lg:space-x-4">
+                        <a href="/" class="hover:underline font-semibold">Calendar</a>
+                        <a href="/schedule" class="hover:underline">Schedule</a>
+                        <a href="/recordings" class="hover:underline">Recordings</a>
+                        <a href="/settings" class="hover:underline">Settings</a>
+                    </div>
+                    <div id="current-datetime" class="hidden lg:block text-sm font-mono bg-blue-700 px-3 py-1 rounded">
+                        Loading...
+                    </div>
+                    <div id="disk-space" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer" title="Click for details">
+                        <span id="disk-text">Loading...</span>
+                    </div>
+                    <div class="border-l border-blue-400 pl-3 lg:pl-4 flex items-center space-x-2 lg:space-x-3">
+                        <span class="text-sm hidden lg:inline">{{ current_user.username }}</span>
+                        <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
+                    </div>
                 </div>
-                <div id="current-datetime" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
-                    Loading...
+            </div>
+
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="hidden md:hidden mt-4 pt-4 border-t border-blue-500">
+                <div class="flex flex-col space-y-3">
+                    <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded font-semibold">Calendar</a>
+                    <a href="/schedule" class="hover:bg-blue-700 px-3 py-2 rounded">Schedule</a>
+                    <a href="/recordings" class="hover:bg-blue-700 px-3 py-2 rounded">Recordings</a>
+                    <a href="/settings" class="hover:bg-blue-700 px-3 py-2 rounded">Settings</a>
                 </div>
-                <div id="disk-space" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer" title="Click for details">
-                    <span id="disk-text">Loading...</span>
-                </div>
-                <div class="border-l border-blue-400 pl-4 flex items-center space-x-3">
-                    <span class="text-sm">{{ current_user.username }}</span>
-                    <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
+                <div class="mt-4 pt-4 border-t border-blue-500 flex flex-wrap gap-2">
+                    <div id="disk-space-mobile" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
+                        <span id="disk-text-mobile">Loading...</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm">{{ current_user.username }}</span>
+                        <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
+                    </div>
                 </div>
             </div>
         </div>
     </nav>
 
+    <script>
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+    </script>
+
     <div class="container mx-auto p-6">
         <div class="bg-white rounded-lg shadow-md p-6">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-semibold">Recording Calendar</h2>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <h2 class="text-xl sm:text-2xl font-semibold">Recording Calendar</h2>
                 <div class="flex space-x-2">
-                    <button onclick="previousWeek()" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">
-                        ← Previous
+                    <button onclick="previousWeek()" class="bg-gray-300 hover:bg-gray-400 px-3 sm:px-4 py-2 rounded text-sm sm:text-base">
+                        ← Prev
                     </button>
-                    <button onclick="currentWeek()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                    <button onclick="currentWeek()" class="bg-blue-500 hover:bg-blue-600 text-white px-3 sm:px-4 py-2 rounded text-sm sm:text-base">
                         Today
                     </button>
-                    <button onclick="nextWeek()" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">
+                    <button onclick="nextWeek()" class="bg-gray-300 hover:bg-gray-400 px-3 sm:px-4 py-2 rounded text-sm sm:text-base">
                         Next →
                     </button>
                 </div>
@@ -52,17 +90,17 @@
                 <!-- Calendar will be rendered here by JavaScript -->
             </div>
 
-            <div class="mt-6 flex space-x-4 text-sm">
+            <div class="mt-6 flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm">
                 <div class="flex items-center">
-                    <div class="w-4 h-4 bg-blue-200 border border-blue-400 rounded mr-2"></div>
+                    <div class="w-3 h-3 sm:w-4 sm:h-4 bg-blue-200 border border-blue-400 rounded mr-1 sm:mr-2"></div>
                     <span>One-time</span>
                 </div>
                 <div class="flex items-center">
-                    <div class="w-4 h-4 bg-purple-200 border border-purple-400 rounded mr-2"></div>
+                    <div class="w-3 h-3 sm:w-4 sm:h-4 bg-purple-200 border border-purple-400 rounded mr-1 sm:mr-2"></div>
                     <span>Recurring</span>
                 </div>
                 <div class="flex items-center">
-                    <div class="w-4 h-4 bg-green-200 border border-green-400 rounded mr-2"></div>
+                    <div class="w-3 h-3 sm:w-4 sm:h-4 bg-green-200 border border-green-400 rounded mr-1 sm:mr-2"></div>
                     <span>Completed</span>
                 </div>
             </div>
@@ -75,8 +113,8 @@
         </div>
 
         <!-- Create Schedule Modal -->
-        <div id="create-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
+        <div id="create-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-xl font-semibold">Create New Recording</h3>
                     <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
@@ -216,38 +254,43 @@
 
                 if (data.error) {
                     document.getElementById('disk-text').textContent = 'Disk: Error';
+                    const mobileText = document.getElementById('disk-text-mobile');
+                    if (mobileText) mobileText.textContent = 'Disk: Error';
                     return;
                 }
 
                 const diskSpace = document.getElementById('disk-space');
                 const diskText = document.getElementById('disk-text');
+                const diskSpaceMobile = document.getElementById('disk-space-mobile');
+                const diskTextMobile = document.getElementById('disk-text-mobile');
 
                 // Format display: "X.X GB / Y.Y GB"
-                diskText.textContent = `${data.used_gb} / ${data.total_gb} GB`;
+                const displayText = `${data.used_gb} / ${data.total_gb} GB`;
+                diskText.textContent = displayText;
+                if (diskTextMobile) diskTextMobile.textContent = displayText;
 
                 // Set title with more details
-                diskSpace.title = `Used: ${data.used_gb} GB of ${data.total_gb} GB (${data.percent_used}%)\n` +
+                const titleText = `Used: ${data.used_gb} GB of ${data.total_gb} GB (${data.percent_used}%)\n` +
                     `Free: ${data.free_gb} GB\n` +
                     `Recording time remaining: ~${data.hours_remaining} hours`;
+                diskSpace.title = titleText;
 
-                // Warning states
+                // Determine class based on warning state
+                let className = 'text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer';
                 if (data.low_space_warning || data.scheduled_warning) {
-                    diskSpace.className = 'text-sm font-mono bg-red-600 px-3 py-1 rounded cursor-pointer animate-pulse';
-                    if (data.scheduled_warning) {
-                        diskSpace.title += `\n\nWARNING: Scheduled recordings (${data.scheduled_hours} hrs) may exceed available space!`;
-                    } else {
-                        diskSpace.title += '\n\nWARNING: Less than 10 hours of recording space remaining!';
-                    }
+                    className = 'text-sm font-mono bg-red-600 px-3 py-1 rounded cursor-pointer animate-pulse';
                 } else if (data.hours_remaining < 24) {
-                    // Yellow warning for less than 24 hours
-                    diskSpace.className = 'text-sm font-mono bg-yellow-600 px-3 py-1 rounded cursor-pointer';
-                } else {
-                    diskSpace.className = 'text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer';
+                    className = 'text-sm font-mono bg-yellow-600 px-3 py-1 rounded cursor-pointer';
                 }
+
+                diskSpace.className = className;
+                if (diskSpaceMobile) diskSpaceMobile.className = className;
 
             } catch (error) {
                 console.error('Error fetching disk space:', error);
                 document.getElementById('disk-text').textContent = 'Disk: --';
+                const mobileText = document.getElementById('disk-text-mobile');
+                if (mobileText) mobileText.textContent = 'Disk: --';
             }
         }
 
@@ -283,53 +326,54 @@
         function renderCalendar() {
             const container = document.getElementById('calendar-container');
             const startOfWeek = getStartOfWeek(currentDate);
-            
+
             let html = '<div class="overflow-x-auto">';
-            
+
             // Render 4 weeks
             for (let week = 0; week < 4; week++) {
                 const weekStart = new Date(startOfWeek);
                 weekStart.setDate(weekStart.getDate() + (week * 7));
-                
+
                 html += `<div class="mb-6">`;
-                html += `<h3 class="font-semibold text-gray-700 mb-2">Week of ${formatDate(weekStart)}</h3>`;
-                html += `<div class="grid grid-cols-7 gap-2">`;
-                
+                html += `<h3 class="font-semibold text-gray-700 mb-2 text-sm sm:text-base">Week of ${formatDate(weekStart)}</h3>`;
+                html += `<div class="grid grid-cols-7 gap-1 sm:gap-2 min-w-[500px] sm:min-w-0">`;
+
                 // Day headers
-                ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(day => {
-                    html += `<div class="font-semibold text-center text-sm text-gray-600 p-2">${day}</div>`;
+                const days = window.innerWidth < 640 ? ['M', 'T', 'W', 'T', 'F', 'S', 'S'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                days.forEach(day => {
+                    html += `<div class="font-semibold text-center text-xs sm:text-sm text-gray-600 p-1 sm:p-2">${day}</div>`;
                 });
-                
+
                 // Days
                 for (let day = 0; day < 7; day++) {
                     const currentDay = new Date(weekStart);
                     currentDay.setDate(currentDay.getDate() + day);
-                    
+
                     const isToday = isSameDay(currentDay, new Date());
                     const eventsOnDay = getEventsForDay(currentDay);
-                    
-                    html += `<div class="border rounded p-2 min-h-24 cursor-pointer hover:bg-gray-50 ${isToday ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-200'}" 
+
+                    html += `<div class="border rounded p-1 sm:p-2 min-h-16 sm:min-h-24 cursor-pointer hover:bg-gray-50 ${isToday ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-200'}"
                              onclick='openCreateModal(${JSON.stringify(formatDateForInput(currentDay))})'>`;
-                    html += `<div class="text-sm font-semibold ${isToday ? 'text-yellow-900' : 'text-gray-700'}">${currentDay.getDate()}</div>`;
-                    
+                    html += `<div class="text-xs sm:text-sm font-semibold ${isToday ? 'text-yellow-900' : 'text-gray-700'}">${currentDay.getDate()}</div>`;
+
                     eventsOnDay.forEach(event => {
-                        const bgColor = event.is_recurring ? 'bg-purple-200 border-purple-400' : 
-                                       event.status === 'completed' ? 'bg-green-200 border-green-400' : 
+                        const bgColor = event.is_recurring ? 'bg-purple-200 border-purple-400' :
+                                       event.status === 'completed' ? 'bg-green-200 border-green-400' :
                                        'bg-blue-200 border-blue-400';
-                        
-                        html += `<div class="${bgColor} border rounded px-2 py-1 mb-1 text-xs cursor-pointer hover:opacity-80"
+
+                        html += `<div class="${bgColor} border rounded px-1 sm:px-2 py-0.5 sm:py-1 mb-1 text-xs cursor-pointer hover:opacity-80"
                                      onclick='event.stopPropagation(); showEventDetails(${JSON.stringify(event)})'>`;
                         html += `<div class="font-semibold truncate">${event.name}</div>`;
-                        html += `<div>${formatTimeRangeShort(event.start_time, event.duration)}</div>`;
+                        html += `<div class="hidden sm:block">${formatTimeRangeShort(event.start_time, event.duration)}</div>`;
                         html += `</div>`;
                     });
-                    
+
                     html += `</div>`;
                 }
-                
+
                 html += `</div></div>`;
             }
-            
+
             html += '</div>';
             container.innerHTML = html;
         }
@@ -579,6 +623,13 @@
 
         // Initial render
         renderCalendar();
+
+        // Re-render on resize for responsive day headers
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(renderCalendar, 250);
+        });
     </script>
 </body>
 </html>
