@@ -114,13 +114,14 @@
             <div id="event-info"></div>
         </div>
 
-        <!-- Create Schedule Modal -->
+        <!-- Create/Edit Schedule Modal -->
         <div id="create-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div class="bg-white rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-semibold">Create New Recording</h3>
+                    <h3 id="modal-title" class="text-xl font-semibold">Create New Recording</h3>
                     <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
                 </div>
+                <input type="hidden" id="modal-edit-id" value="">
                 
                 <div class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -133,7 +134,7 @@
                         <div>
                             <label class="block text-gray-700 mb-2">Date *</label>
                             <input type="date" id="modal-date"
-                                class="w-full border border-gray-300 rounded px-3 py-2" readonly>
+                                class="w-full border border-gray-300 rounded px-3 py-2">
                         </div>
                         
                         <div>
@@ -228,7 +229,7 @@
                         <button onclick="closeModal()" class="px-4 py-2 border rounded hover:bg-gray-100">
                             Cancel
                         </button>
-                        <button onclick="createFromModal()" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded">
+                        <button id="modal-submit-btn" onclick="saveFromModal()" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded">
                             Create Recording
                         </button>
                     </div>
@@ -474,9 +475,9 @@
                     ${event.notes ? `<div><strong>Notes:</strong> ${event.notes}</div>` : ''}
                     ${event.status === 'pending' ? `
                         <div class="mt-4 flex space-x-2">
-                            <a href="/schedule" class="inline-block bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
-                                Edit in Schedule
-                            </a>
+                            <button onclick='openEditModal(${JSON.stringify(event).replace(/'/g, "&#39;")})' class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                                Edit
+                            </button>
                             <button onclick="deleteEvent('${event.id}')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">
                                 Delete
                             </button>
@@ -519,6 +520,11 @@
         }
 
         function openCreateModal(dateStr) {
+            // Reset to create mode
+            document.getElementById('modal-edit-id').value = '';
+            document.getElementById('modal-title').textContent = 'Create New Recording';
+            document.getElementById('modal-submit-btn').textContent = 'Create Recording';
+
             document.getElementById('modal-date').value = dateStr;
             document.getElementById('modal-name').value = '';
             document.getElementById('modal-time').value = '09:00';
@@ -527,7 +533,70 @@
             document.getElementById('modal-recurring').checked = false;
             document.getElementById('modal-capture-video').checked = false;
             document.getElementById('modal-duration-warning').classList.add('hidden');
+
+            // Clear weekday checkboxes
+            document.querySelectorAll('.modal-weekday').forEach(cb => cb.checked = false);
+            document.getElementById('modal-recurrence-type').value = 'weekly';
+            document.getElementById('modal-month-day').value = '1';
+
             toggleModalRecurring();
+
+            document.getElementById('create-modal').classList.remove('hidden');
+        }
+
+        function openEditModal(event) {
+            // Set to edit mode
+            document.getElementById('modal-edit-id').value = event.id;
+            document.getElementById('modal-title').textContent = 'Edit Recording';
+            document.getElementById('modal-submit-btn').textContent = 'Save Changes';
+
+            // Parse start time
+            const startTime = new Date(event.start_time);
+            const dateStr = startTime.toISOString().split('T')[0];
+            const timeStr = startTime.toTimeString().substring(0, 5);
+
+            document.getElementById('modal-date').value = dateStr;
+            document.getElementById('modal-name').value = event.name;
+            document.getElementById('modal-time').value = timeStr;
+            document.getElementById('modal-duration').value = Math.floor(event.duration / 60);
+            document.getElementById('modal-notes').value = event.notes || '';
+            document.getElementById('modal-recurring').checked = event.is_recurring;
+            document.getElementById('modal-capture-video').checked = event.capture_video;
+
+            // Handle duration warning
+            checkModalDurationWarning();
+
+            // Handle recurring options
+            if (event.is_recurring && event.recurrence_pattern) {
+                try {
+                    const pattern = JSON.parse(event.recurrence_pattern);
+                    document.getElementById('modal-recurrence-type').value = pattern.type;
+
+                    // Clear all weekday checkboxes first
+                    document.querySelectorAll('.modal-weekday').forEach(cb => cb.checked = false);
+
+                    if (pattern.type === 'weekly' && pattern.days) {
+                        pattern.days.forEach(day => {
+                            const cb = document.querySelector(`.modal-weekday[value="${day}"]`);
+                            if (cb) cb.checked = true;
+                        });
+                    } else if (pattern.type === 'monthly' && pattern.day) {
+                        document.getElementById('modal-month-day').value = pattern.day;
+                    }
+                } catch (e) {
+                    console.error('Error parsing recurrence pattern:', e);
+                }
+            } else {
+                // Clear weekday checkboxes
+                document.querySelectorAll('.modal-weekday').forEach(cb => cb.checked = false);
+                document.getElementById('modal-recurrence-type').value = 'weekly';
+                document.getElementById('modal-month-day').value = '1';
+            }
+
+            toggleModalRecurring();
+
+            // Hide event details panel
+            document.getElementById('event-details').classList.add('hidden');
 
             document.getElementById('create-modal').classList.remove('hidden');
         }
@@ -549,7 +618,10 @@
             document.getElementById('modal-monthly-options').classList.toggle('hidden', type !== 'monthly');
         }
 
-        async function createFromModal() {
+        async function saveFromModal() {
+            const editId = document.getElementById('modal-edit-id').value;
+            const isEditMode = editId !== '';
+
             const name = document.getElementById('modal-name').value;
             const date = document.getElementById('modal-date').value;
             const time = document.getElementById('modal-time').value;
@@ -587,31 +659,51 @@
             }
 
             try {
-                const response = await fetch('/api/schedule', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name,
-                        start_time: startTime,
-                        duration,
-                        notes,
-                        is_recurring: isRecurring,
-                        recurrence_pattern: recurrencePattern,
-                        allow_override: allowOverride,
-                        capture_video: captureVideo
-                    })
-                });
+                let response;
+                if (isEditMode) {
+                    // Update existing schedule
+                    response = await fetch(`/api/schedule/${editId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name,
+                            start_time: startTime,
+                            duration,
+                            notes,
+                            is_recurring: isRecurring,
+                            recurrence_pattern: recurrencePattern,
+                            allow_override: allowOverride,
+                            capture_video: captureVideo
+                        })
+                    });
+                } else {
+                    // Create new schedule
+                    response = await fetch('/api/schedule', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name,
+                            start_time: startTime,
+                            duration,
+                            notes,
+                            is_recurring: isRecurring,
+                            recurrence_pattern: recurrencePattern,
+                            allow_override: allowOverride,
+                            capture_video: captureVideo
+                        })
+                    });
+                }
 
                 const result = await response.json();
-                
+
                 if (result.error) {
                     alert('Error: ' + result.error);
                 } else {
                     closeModal();
-                    location.reload(); // Refresh to show new event
+                    location.reload(); // Refresh to show changes
                 }
             } catch (error) {
-                alert('Error creating schedule: ' + error);
+                alert('Error saving schedule: ' + error);
             }
         }
 

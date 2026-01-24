@@ -305,6 +305,30 @@ def delete_schedule(job_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/schedule/<job_id>', methods=['PUT'])
+@login_required
+def update_schedule(job_id):
+    """Update existing scheduled recording"""
+    data = request.json
+    try:
+        scheduler.update_job(
+            job_id=job_id,
+            start_time=data.get('start_time'),
+            duration=data.get('duration'),
+            name=data.get('name'),
+            notes=data.get('notes'),
+            is_recurring=data.get('is_recurring'),
+            recurrence_pattern=data.get('recurrence_pattern'),
+            allow_override=data.get('allow_override'),
+            capture_video=data.get('capture_video')
+        )
+        return jsonify({'success': True})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/recordings')
 @login_required
 def recordings_page():

@@ -184,7 +184,7 @@ def _create_cron_trigger(pattern, time_of_day):
 def delete_job(job_id):
     """
     Delete a scheduled job
-    
+
     Args:
         job_id: Job identifier
     """
@@ -193,13 +193,95 @@ def delete_job(job_id):
         scheduler.remove_job(job_id)
     except:
         pass  # Job may have already completed
-    
+
     # Remove from database
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('DELETE FROM scheduled_jobs WHERE id = ?', (job_id,))
     conn.commit()
     conn.close()
+
+
+def update_job(job_id, start_time=None, duration=None, name=None, notes=None,
+               is_recurring=None, recurrence_pattern=None, allow_override=None,
+               capture_video=None):
+    """
+    Update an existing scheduled job
+
+    Args:
+        job_id: Job identifier
+        start_time: ISO format datetime string (optional)
+        duration: Recording duration in seconds (optional)
+        name: Human-readable job name (optional)
+        notes: Optional notes about the recording (optional)
+        is_recurring: Whether this is a recurring schedule (optional)
+        recurrence_pattern: JSON string with recurrence settings (optional)
+        allow_override: Allow duration longer than default limit (optional)
+        capture_video: Also capture video from PTZ camera (optional)
+
+    Returns:
+        True if successful
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Get current job data
+    cursor.execute('SELECT * FROM scheduled_jobs WHERE id = ?', (job_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise ValueError(f"Job {job_id} not found")
+
+    current = dict(row)
+
+    # Update only provided fields
+    new_start_time = start_time if start_time is not None else current['start_time']
+    new_duration = duration if duration is not None else current['duration']
+    new_name = name if name is not None else current['name']
+    new_notes = notes if notes is not None else current['notes']
+    new_is_recurring = is_recurring if is_recurring is not None else bool(current['is_recurring'])
+    new_recurrence_pattern = recurrence_pattern if recurrence_pattern is not None else current['recurrence_pattern']
+    new_allow_override = allow_override if allow_override is not None else bool(current['allow_override'])
+    new_capture_video = capture_video if capture_video is not None else bool(current['capture_video'])
+
+    # Update database
+    cursor.execute('''
+        UPDATE scheduled_jobs
+        SET start_time = ?, duration = ?, name = ?, notes = ?,
+            is_recurring = ?, recurrence_pattern = ?, allow_override = ?, capture_video = ?
+        WHERE id = ?
+    ''', (new_start_time, new_duration, new_name, new_notes,
+          1 if new_is_recurring else 0, new_recurrence_pattern,
+          1 if new_allow_override else 0, 1 if new_capture_video else 0, job_id))
+
+    conn.commit()
+    conn.close()
+
+    # Remove old scheduler job
+    try:
+        scheduler.remove_job(job_id)
+    except:
+        pass
+
+    # Re-schedule with new parameters
+    dt = datetime.fromisoformat(new_start_time)
+
+    if new_is_recurring and new_recurrence_pattern:
+        pattern = json.loads(new_recurrence_pattern)
+        trigger = _create_cron_trigger(pattern, dt.time())
+    else:
+        trigger = DateTrigger(run_date=dt)
+
+    scheduler.add_job(
+        func=_execute_scheduled_recording,
+        trigger=trigger,
+        id=job_id,
+        args=[job_id, new_duration, new_allow_override, new_capture_video],
+        replace_existing=True
+    )
+
+    return True
 
 
 def get_all_jobs():
