@@ -1,15 +1,22 @@
 # Deployment Checklist
 
-Use this checklist when deploying Audio Recorder to a new Raspberry Pi.
+Use this checklist when deploying Audio/Video Recorder to a new Raspberry Pi.
 
 ## Pre-Deployment
 
-### Hardware Setup
+### Hardware Setup (Audio - Required)
 - [ ] Raspberry Pi 3B+ or 4 with adequate power supply
 - [ ] 32GB+ SD card (Class 10 or better)
 - [ ] Behringer UCA202 USB audio interface
 - [ ] Network cable (or WiFi configured)
 - [ ] Audio sources connected to UCA202 inputs
+
+### Hardware Setup (Video - Optional)
+- [ ] PTZOptics camera with HTTP CGI and RTSP support
+- [ ] Camera connected to same network as Pi
+- [ ] USB external drive for video storage
+- [ ] Camera IP address documented: _______________
+- [ ] Camera credentials (if authentication enabled): _______________
 
 ### Software Preparation
 - [ ] Raspberry Pi OS Lite (64-bit) image downloaded
@@ -70,19 +77,17 @@ If the installer encounters issues, use the helper scripts:
 - [ ] Status shows "Idle"
 
 ### Page Verification
-- [ ] Test Dashboard (/) - loads without errors
+- [ ] Test Calendar (/) - loads without errors
 - [ ] Test Schedule (/schedule) - loads without errors
-- [ ] Test Calendar (/calendar) - loads without errors
-- [ ] Test Templates (/templates) - loads without errors
+- [ ] Test Camera (/camera) - loads without errors
 - [ ] Test Recordings (/recordings) - loads without errors
 - [ ] Test Settings (/settings) - loads without errors
 
 ### Functional Testing
 
-#### Manual Recording Test
-- [ ] Go to Dashboard
-- [ ] Set duration: 1 minute
-- [ ] Click "Start Recording"
+#### Manual Audio Recording Test
+- [ ] Go to Schedule page
+- [ ] Create a quick one-time recording (1 minute)
 - [ ] Verify status changes to recording state
 - [ ] Wait for recording to complete (or click Stop)
 - [ ] Go to Recordings page
@@ -101,15 +106,8 @@ If the installer encounters issues, use the helper scripts:
 - [ ] Go to Calendar page
 - [ ] Click on a future day
 - [ ] Verify schedule creation modal appears
+- [ ] Verify "Also capture video" checkbox is present
 - [ ] Close modal without saving
-
-#### Template Test
-- [ ] Go to Templates page
-- [ ] Create template: "Daily 1-Hour Recording"
-- [ ] Set duration: 1 hour
-- [ ] Set recurrence: Daily at 09:00
-- [ ] Save template
-- [ ] Verify template appears in list
 
 #### Schedule Test
 - [ ] Go to Schedule page
@@ -119,6 +117,19 @@ If the installer encounters issues, use the helper scripts:
 - [ ] Verify event shows up
 - [ ] Return to Schedule page
 - [ ] Delete test schedule
+
+#### Video Recording Test (if camera configured)
+- [ ] Go to Settings page
+- [ ] Configure camera IP and credentials
+- [ ] Click "Test Connection" - verify success
+- [ ] Go to Camera page
+- [ ] Click a PTZ preset button - verify camera moves
+- [ ] Start a short video recording (1 minute)
+- [ ] Verify recording status shows active
+- [ ] Stop recording
+- [ ] Verify raw file appears in file list
+- [ ] Wait for transcoding to complete
+- [ ] Verify processed file appears
 
 ### Reboot Test
 - [ ] Reboot Pi: `sudo reboot`
@@ -165,10 +176,32 @@ If the installer encounters issues, use the helper scripts:
 - [ ] Configure channel suffixes (L/R or custom)
 - [ ] Verify filename preview shows expected format
 
+### Video/Camera Setup
+- [ ] Mount USB drive for video storage:
+  ```bash
+  sudo mkdir -p /mnt/usb_recorder
+  sudo mount /dev/sda1 /mnt/usb_recorder
+  ```
+- [ ] Add to /etc/fstab for permanent mount:
+  ```bash
+  echo '/dev/sda1 /mnt/usb_recorder auto defaults,nofail 0 2' | sudo tee -a /etc/fstab
+  ```
+- [ ] Create raw and processed directories:
+  ```bash
+  mkdir -p /mnt/usb_recorder/raw /mnt/usb_recorder/processed
+  ```
+- [ ] Go to Settings page
+- [ ] Configure camera IP address
+- [ ] Enter camera credentials (if required)
+- [ ] Set USB storage path: `/mnt/usb_recorder`
+- [ ] Name PTZ presets (e.g., "Podium", "Wide", "Audience")
+- [ ] Test camera connection
+
 ### Performance Monitoring
 - [ ] Check CPU temperature: `vcgencmd measure_temp`
 - [ ] Ensure adequate cooling (add heatsink/fan if needed)
 - [ ] Monitor during first few recordings
+- [ ] Monitor during video transcoding (higher CPU usage)
 
 ## Sign-Off
 
@@ -180,8 +213,15 @@ If the installer encounters issues, use the helper scripts:
 - **Network Info:** _______________
 - **Location:** _______________
 
+### Video Configuration (if applicable)
+- **Camera Model:** _______________
+- **Camera IP:** _______________
+- **USB Storage Path:** _______________
+- **USB Drive Capacity:** _______________
+
 ### Test Results
-- [ ] All tests passed
+- [ ] All audio tests passed
+- [ ] All video tests passed (if configured)
 - [ ] Known issues documented: _______________
 - [ ] User training completed: _______________
 - [ ] Backup exported: _______________
@@ -195,4 +235,4 @@ If the installer encounters issues, use the helper scripts:
 
 **Deployment Complete!**
 
-The Audio Recorder is now ready for production use.
+The Audio/Video Recorder is now ready for production use.

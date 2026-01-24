@@ -2,6 +2,62 @@
 
 All notable changes to the ILC Audio Recorder project are documented in this file.
 
+## [1.4.0] - 2026-01-24
+
+### Added
+- **Video Capture System** - PTZOptics camera integration for synchronized A/V recording
+  - New Camera tab for PTZ preset control and video recording
+  - RTSP stream capture using ffmpeg with `-c copy` (zero CPU re-encoding)
+  - Hardware-accelerated transcoding using `h264_v4l2m2m` (Raspberry Pi GPU)
+  - Automatic post-processing: raw files saved to `/raw/`, transcoded to `/processed/`
+  - Real-time transcode progress tracking with percentage display
+  - USB storage validation with mount point checking
+
+- **PTZ Camera Control**
+  - 10 customizable preset buttons with user-defined labels
+  - HTTP CGI proxy for PTZOptics camera commands
+  - Optional HTTP Basic authentication support
+  - Connection testing from Settings page
+
+- **Camera Configuration** (Settings page)
+  - Camera IP address and credentials
+  - USB storage path configuration
+  - Preset naming for intuitive camera positions (e.g., "Podium", "Wide Angle")
+
+- **Scheduled Video Recording**
+  - "Also capture video" checkbox in Calendar and Schedule pages
+  - Video recording triggered automatically with audio schedules
+  - Independent failure handling (audio continues if video fails)
+
+- **Live Stream Viewing**
+  - Copyable ffplay command for terminal playback
+  - Copyable RTSP URL for VLC and other players
+
+- **New API Endpoints**
+  - `GET/POST /api/camera/preset/<id>` - PTZ preset control
+  - `GET/POST /api/camera/config` - Camera settings
+  - `POST /api/camera/test` - Connection testing
+  - `GET /api/camera/stream` - Stream URL info
+  - `GET /api/video/status` - Recording & transcode status
+  - `POST /api/video/start` - Start video recording
+  - `POST /api/video/stop` - Stop video recording (graceful MP4 finalization)
+  - `GET /api/video/storage` - USB storage disk space
+  - `GET /api/video/files` - List raw and processed videos
+  - `POST /api/video/transcode/cancel` - Cancel transcoding
+
+### Changed
+- Navigation bar updated with Camera link on all pages
+- `/api/record/start` now accepts `capture_video` parameter
+- `/api/record/stop` now stops both audio and video if running
+- Scheduled jobs now include `capture_video` field
+
+### Technical
+- New `video_recorder.py` module for all video functionality
+- Database schema extended with `capture_video` column (auto-migrated)
+- Added `requests` library dependency for camera HTTP API
+
+---
+
 ## [1.3.0] - 2026-01-20
 
 ### Added

@@ -3,27 +3,36 @@
 ## For Impatient People Who Want to Get Recording ASAP
 
 ### Prerequisites Checklist
+
+**Required (Audio):**
 - [ ] Raspberry Pi 3B+ or 4 with Raspberry Pi OS Lite (64-bit) installed
 - [ ] Behringer UCA202 connected via USB
 - [ ] Network connection (Ethernet or WiFi)
 - [ ] SSH access configured
 
-### Installation (Automated)
+**Optional (Video):**
+- [ ] PTZOptics camera on same network
+- [ ] USB drive for video storage (mounted at `/mnt/usb_recorder`)
+
+### Installation (New Install)
 
 ```bash
-# 1. Clone or download the project
 cd ~
 git clone https://github.com/vilpter/ilc-Audio-Recorder.git audio-recorder
 cd audio-recorder
-
-# 2. Run the installer (handles everything)
 ./install.sh
-
-# 3. Access web UI
-# Open browser to: http://<pi-ip>:5000
 ```
 
-That's it! The installer handles:
+### Upgrading (Existing Install)
+
+```bash
+cd ~/audio-recorder
+git pull
+./install.sh
+# Select "Upgrade" when prompted
+```
+
+The installer handles:
 - System dependencies (Python, FFmpeg, ALSA)
 - Python packages
 - ALSA configuration
@@ -43,12 +52,25 @@ Open in browser:
 http://YOUR_PI_IP:5000
 ```
 
-### First Recording
+### First Audio Recording
 
-1. Go to **Dashboard** (/)
-2. Select duration (default: 1 hour)
-3. Click **Start Recording**
-4. Files will be saved to `~/recordings/`
+1. Go to **Calendar** (/)
+2. Click on a day to create a schedule, or go to **Schedule**
+3. Set duration (default: 1 hour)
+4. Click **Create Schedule** or start immediately
+5. Audio files will be saved to `~/recordings/`
+
+### First Video Recording (Optional)
+
+1. Go to **Settings** and configure camera:
+   - Enter camera IP address
+   - Enter credentials (if required)
+   - Set USB storage path
+   - Click **Test Connection**
+2. Go to **Camera** page
+3. Select a PTZ preset (if desired)
+4. Click **Start Recording**
+5. Video files will be saved to USB storage
 
 ### Verify Audio is Working
 
@@ -129,7 +151,25 @@ ls -lh ~/recordings/
 Access **Settings** page in the web UI to:
 - Configure audio device (auto-detect or manual)
 - Customize recording filename format (channel suffixes)
+- Configure PTZ camera (IP, credentials, presets)
+- Set USB storage path for video files
 - Export/import schedules and configuration
 - Backup and restore settings
+
+### USB Storage Setup (for Video)
+
+```bash
+# Create mount point
+sudo mkdir -p /mnt/usb_recorder
+
+# Find your USB drive
+lsblk
+
+# Mount the drive (replace sda1 with your device)
+sudo mount /dev/sda1 /mnt/usb_recorder
+
+# For permanent mount, add to /etc/fstab:
+echo '/dev/sda1 /mnt/usb_recorder auto defaults,nofail 0 2' | sudo tee -a /etc/fstab
+```
 
 For detailed documentation, see [README.md](README.md).

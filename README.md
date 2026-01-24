@@ -1,12 +1,12 @@
-# Audio Recorder
+# ILC Audio & Video Recorder
 
-**Headless Dual-Mono Audio Recording System for Raspberry Pi**
+**Headless Dual-Mono Audio + PTZ Video Recording System for Raspberry Pi**
 
-A professional-grade dual-channel audio recording system with web-based scheduling and management for Raspberry Pi with Behringer UCA202 USB audio interface.
+A professional-grade dual-channel audio and video recording system with web-based scheduling and management for Raspberry Pi. Supports Behringer UCA202 USB audio interface and PTZOptics cameras for synchronized A/V capture.
 
 ## Features
 
-### Recording
+### Audio Recording
 - Dual-mono capture (48kHz, 16-bit WAV, independent channels)
 - Manual start/stop from Dashboard
 - Configurable recording filenames with customizable channel suffixes
@@ -14,21 +14,32 @@ A professional-grade dual-channel audio recording system with web-based scheduli
 - 4-hour duration limit with override option
 - Pre-flight disk space checking
 
+### Video Recording
+- PTZOptics camera integration for synchronized A/V capture
+- RTSP stream capture using FFmpeg with `-c copy` (zero CPU re-encoding)
+- Hardware-accelerated transcoding using `h264_v4l2m2m` (Raspberry Pi GPU)
+- 10 customizable PTZ preset buttons with user-defined labels
+- Automatic post-processing: raw files saved to `/raw/`, transcoded to `/processed/`
+- Real-time transcode progress tracking with percentage display
+- USB storage validation with mount point checking
+- Live stream viewing with copyable ffplay/VLC commands
+
 ### Scheduling
 - One-time scheduled recordings
 - Recurring schedules (daily, weekly, monthly patterns)
-- Recording templates (save and reuse configurations)
 - Multi-week calendar view
 - Click calendar days to create schedules instantly
+- Optional video capture with audio schedules
 
 ### Web Interface
 - Dashboard with real-time status
+- Camera control page for PTZ presets and video recording
 - Schedule management page
 - Visual calendar with color-coded events
-- Template library
-- File browser with download/delete
+- File browser with download/delete and batch operations
 - Live date/time display on all pages
-- Settings page with device configuration
+- Disk space monitoring in navigation ribbon
+- Settings page with audio and camera configuration
 - Complete backup/restore system
 - User authentication with login/logout
 
@@ -41,11 +52,17 @@ A professional-grade dual-channel audio recording system with web-based scheduli
 
 ## Hardware Requirements
 
+### Required (Audio)
 - **Raspberry Pi:** Pi 3B/3B+ or Pi 4 (2GB+ RAM recommended)
 - **Audio Interface:** Behringer UCA202 or UCA222 USB
 - **Storage:** 32GB+ SD card (Class 10 or better)
 - **Power Supply:** 5V/2.5A (Pi 3) or 5V/3A (Pi 4)
 - **Network:** Ethernet or WiFi connection
+
+### Optional (Video)
+- **PTZ Camera:** PTZOptics camera with HTTP CGI support and RTSP streaming
+- **USB Storage:** External USB drive for video files (mounted at `/mnt/usb_recorder`)
+- **Network:** Camera and Pi must be on same network for RTSP access
 
 ## Software Requirements
 
@@ -56,18 +73,23 @@ A professional-grade dual-channel audio recording system with web-based scheduli
 
 ## Quick Start
 
+### New Installation
 ```bash
-# Clone the repository
 cd ~
 git clone https://github.com/vilpter/ilc-Audio-Recorder.git audio-recorder
 cd audio-recorder
-
-# Run the automated installer
 ./install.sh
-
-# Access web interface
-# Open browser: http://<raspberry-pi-ip>:5000
 ```
+
+### Upgrading Existing Installation
+```bash
+cd ~/audio-recorder
+git pull
+./install.sh
+# Select "Upgrade" when prompted
+```
+
+Access web interface at: `http://<raspberry-pi-ip>:5000`
 
 The installer handles:
 - System dependencies (Python, FFmpeg, ALSA, SQLite)
@@ -77,9 +99,7 @@ The installer handles:
 - Systemd service setup
 - Log directories
 
-**Upgrading:** When run on an existing installation, the installer detects this and offers:
-1. **Fresh Install** - Overwrites all configuration
-2. **Upgrade** - Updates code while preserving your ALSA config, udev rules, and service customizations
+**Upgrade Mode** preserves your ALSA config, udev rules, and service customizations.
 
 ## Installation (Manual)
 
@@ -135,38 +155,38 @@ sudo systemctl start audio-recorder
 
 ## Usage
 
-### Dashboard (/)
-- View current recording status
-- Start/stop manual recordings
-- Quick record presets
+### Calendar (/)
+- Visual multi-week calendar view
+- See all upcoming recordings
+- Click any day to create a new schedule
+- Option to capture video with audio schedules
 
 ### Schedule (/schedule)
 - Create one-time scheduled recordings
 - Create recurring schedules
-- Load presets from templates
 - View and delete scheduled jobs
+- Option to capture video with audio
 
-### Calendar (/calendar)
-- Visual multi-week calendar view
-- See all upcoming recordings
-- Click any day to create a new schedule
-
-### Templates (/templates)
-- Create reusable recording presets
-- Save common recording configurations
-- Quick-load templates when scheduling
+### Camera (/camera)
+- Control PTZ camera presets (10 customizable positions)
+- Start/stop video recording manually
+- View transcode progress for processed files
+- Access live stream URLs for external players
+- Browse raw and processed video files
 
 ### Recordings (/recordings)
-- Browse all recorded files
-- Download recordings
-- Delete old files
+- Browse all recorded audio files
+- Batch select for bulk download or delete
+- Download recordings as ZIP archive
 
 ### Settings (/settings)
 - Configure audio device (auto-detect or manual)
+- Configure PTZ camera (IP, credentials, RTSP port)
+- Set PTZ preset names (e.g., "Podium", "Wide Angle")
+- Configure USB storage path for video files
+- Test camera connection
 - Customize recording filename format
-- Set channel suffixes (L/R or custom)
-- Export schedules and configuration
-- Import backups with one-click revert
+- Export/import schedules and configuration
 
 ## File Structure
 
@@ -174,8 +194,9 @@ sudo systemctl start audio-recorder
 audio-recorder/
 ├── app.py                    # Flask web server
 ├── recorder.py               # Audio capture logic
+├── video_recorder.py         # Video capture and transcoding
 ├── scheduler.py              # Job scheduling (APScheduler)
-├── templates_manager.py      # Recording templates manager
+├── auth.py                   # Authentication module
 ├── requirements.txt          # Python dependencies
 ├── audio-recorder.service    # Systemd service file
 ├── install.sh                # Automated installer
@@ -184,13 +205,11 @@ audio-recorder/
 ├── configs/
 │   ├── asound.conf           # ALSA configuration
 │   └── 85-usb-audio.rules    # udev rules for USB audio
-├── auth.py                   # Authentication module
 └── templates/                # HTML templates
-    ├── index.html            # Dashboard
+    ├── calendar.html         # Calendar view (home page)
     ├── schedule.html         # Schedule manager
-    ├── calendar.html         # Calendar view
+    ├── camera.html           # PTZ camera control
     ├── recordings.html       # File browser
-    ├── templates_mgmt.html   # Template manager
     ├── settings.html         # Settings page
     ├── login.html            # Login page
     ├── setup.html            # Initial setup
@@ -216,6 +235,36 @@ Files are saved as dual-mono WAV files:
 - ~690 MB/hour for both channels
 - 4-hour recording ≈ 2.8 GB total
 
+## Video Recording
+
+### Storage Structure
+Video files are saved to USB storage (default: `/mnt/usb_recorder`):
+```
+/mnt/usb_recorder/
+├── raw/                      # Original RTSP captures (large files)
+│   └── video_2026-01-24_14-30-00.mp4
+└── processed/                # Transcoded files (smaller, Pi-optimized)
+    └── video_2026-01-24_14-30-00.mp4
+```
+
+### Video Format
+- **Raw Files:** Direct RTSP stream copy (no re-encoding, zero CPU usage)
+- **Processed Files:** H.264 transcoded using Raspberry Pi GPU (`h264_v4l2m2m`)
+- **Default Bitrate:** 2 Mbps (configurable)
+
+### PTZ Camera Setup
+1. Go to **Settings** page
+2. Enter camera IP address (e.g., `192.168.1.100`)
+3. Enter credentials if authentication is enabled
+4. Configure USB storage path
+5. Name your PTZ presets (e.g., "Podium", "Wide Angle", "Audience")
+6. Click **Test Connection** to verify
+
+### Live Stream Viewing
+From the **Camera** page, copy the stream URL for external players:
+- **ffplay:** `ffplay rtsp://192.168.1.100:554/1`
+- **VLC:** Open Network Stream with the RTSP URL
+
 ## Configuration
 
 ### Audio Device
@@ -229,10 +278,18 @@ Configure channel suffixes in Settings:
 - Change to anything (e.g., "Left"/"Right", "Ch1"/"Ch2")
 - Live preview shows expected filename format
 
+### Camera Configuration
+Configure in Settings page:
+- **Camera IP:** Network address of PTZOptics camera
+- **Username/Password:** Optional HTTP Basic authentication
+- **RTSP Port:** Default 554
+- **USB Storage Path:** Mount point for video files (default `/mnt/usb_recorder`)
+- **Preset Names:** Custom labels for PTZ positions 1-10
+
 ### Backup/Restore
 Export from Settings page:
-- **Schedules (.sched):** All scheduled recordings and templates
-- **Configuration (.conf):** Audio device settings, channel suffixes
+- **Schedules (.sched):** All scheduled recordings
+- **Configuration (.conf):** Audio device settings, channel suffixes, camera config
 
 Import features:
 - Two-step confirmation before overwriting
@@ -298,14 +355,61 @@ curl http://localhost:5000
    groups $USER  # Should include "audio"
    ```
 
+### Video Recording Issues
+
+**Camera not connecting?**
+1. Verify camera IP in Settings
+2. Test camera ping: `ping 192.168.1.100`
+3. Check camera is on same network as Pi
+4. Verify credentials if authentication enabled
+
+**USB storage not detected?**
+```bash
+# Check mount point exists
+ls -la /mnt/usb_recorder
+
+# Verify USB drive is mounted
+df -h /mnt/usb_recorder
+
+# Mount manually if needed
+sudo mount /dev/sda1 /mnt/usb_recorder
+```
+
+**Transcoding slow or failing?**
+```bash
+# Check hardware encoder availability
+ffmpeg -encoders | grep v4l2
+
+# Monitor transcode progress in logs
+tail -f /var/log/audio-recorder/app.log
+```
+
+**RTSP stream not working?**
+```bash
+# Test stream directly
+ffplay rtsp://CAMERA_IP:554/1
+
+# Check port is accessible
+nc -zv CAMERA_IP 554
+```
+
 ## Performance
 
+### Audio Recording
 | Resource | Usage | Notes |
 |----------|-------|-------|
 | **CPU** | <5% | During recording on Pi 3/4 |
 | **RAM** | ~100 MB | Application memory |
 | **Disk I/O** | 384 KB/s | Sustained write rate |
 | **File Size** | ~345 MB/hour | Per channel (WAV format) |
+
+### Video Recording
+| Resource | Usage | Notes |
+|----------|-------|-------|
+| **CPU (capture)** | <5% | RTSP passthrough with `-c copy` |
+| **CPU (transcode)** | 10-30% | Hardware-accelerated `h264_v4l2m2m` |
+| **File Size (raw)** | Varies | Depends on camera bitrate |
+| **File Size (processed)** | ~900 MB/hour | At 2 Mbps default bitrate |
 
 ## Security & Authentication
 
@@ -329,20 +433,27 @@ On first access, you'll be prompted to create an admin account:
 
 ## Changelog
 
-### v1.3.0 (Current)
+### v1.4.0 (Current)
+- Added PTZOptics camera integration for synchronized A/V recording
+- Added Camera tab for PTZ preset control and video recording
+- RTSP stream capture with zero CPU re-encoding (`-c copy`)
+- Hardware-accelerated transcoding using Raspberry Pi GPU
+- USB storage support for video files
+- Video capture checkbox in Calendar and Schedule pages
+- Real-time transcode progress tracking
+- Live stream viewing with copyable URLs
+
+### v1.3.0
 - Added user authentication (login/logout)
-- Added initial setup wizard for admin account creation
-- Added change password functionality
-- Added "Remember me" persistent sessions
-- All routes now require authentication
+- Added batch file operations (multi-select, bulk download/delete)
+- Added disk space monitoring in navigation ribbon
+- Calendar is now the root URL
+- Removed templates feature for simplicity
 
 ### v1.2.0
-- Fixed recording stop button error when recording already finished
-- Added live date/time clock in navigation bar
 - Added configurable recording filename format
 - Added calendar day click to create schedules
 - Added complete backup/restore system
-- Refactored code for better maintainability
 
 ### v1.1.0
 - Added automated installation script
@@ -351,31 +462,29 @@ On first access, you'll be prompted to create an admin account:
 ### v1.0.0
 - Initial release with core recording and scheduling features
 
-See [RELEASE_NOTES_v1.2.0.md](RELEASE_NOTES_v1.2.0.md) for detailed changes.
+See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
 ## Roadmap
 
 ### Planned Features
-- Calendar - Event Details - Include a Delete button when event details of a selected recording are displayed.
-- Instead of a heading "Event Details" on the Calendar page when a scheduled recording is selected, display the name of the event as the heading.
-- Migrate fill-in date to the 'Create New Recording' window when clicking on a calendar day
-- Migrate the Recording Status and Quick Record secgtions from the settings page to the Schedule page
-- Add end times to recordings displayed on the schedule based on the start and durations [start - end]
-- Note the last date of download for files.
-- Add ability to batch select and download or delete multiple files.
-- Disk space monitoring dashboard in GUI top ribbon
-  -- Include an X of Y indication
-  -- Make the entire ribbon red and identify how many hours of recording space are available when > 10 hours with default recording settings.
-  -- Make entire ribbon red and identify when the next week of scheduled recordings would fill available space
-- Post-processing feature (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate option
+- Audio post-processing (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate
+- Note the last date of download for files
+- Video file management in Recordings page
 
-### Recently Completed
-- Date/time display added to Settings page ribbon
-- Templates feature eliminated throughout application
-- 4-hour recording checkbox replaced with dynamic red warning
-- Calendar is now the root URL (/)
-- Dashboard content migrated to Settings page
-- Navigation reordered: Calendar | Schedule | Recordings | Settings
+### Recently Completed (v1.4.0)
+- PTZOptics camera integration with video recording
+- RTSP stream capture with hardware-accelerated transcoding
+- Video capture option for scheduled recordings
+- Camera settings page with preset naming
+- Live stream URLs for external players
+
+### Previously Completed (v1.3.0)
+- Batch file operations (multi-select, bulk download/delete)
+- Disk space monitoring in navigation ribbon
+- Calendar event delete button
+- Event name as heading instead of "Event Details"
+- End times displayed as time ranges
+- Templates feature removed for simplicity
 
 ## Built With
 
@@ -391,5 +500,5 @@ See [RELEASE_NOTES_v1.2.0.md](RELEASE_NOTES_v1.2.0.md) for detailed changes.
 
 ---
 
-**Version:** 1.3.0
-**Last Updated:** 2026-01-18
+**Version:** 1.4.0
+**Last Updated:** 2026-01-24

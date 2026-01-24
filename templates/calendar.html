@@ -26,6 +26,7 @@
                         <a href="/" class="hover:underline font-semibold">Calendar</a>
                         <a href="/schedule" class="hover:underline">Schedule</a>
                         <a href="/recordings" class="hover:underline">Recordings</a>
+                        <a href="/camera" class="hover:underline">Camera</a>
                         <a href="/settings" class="hover:underline">Settings</a>
                     </div>
                     <div id="current-datetime" class="hidden lg:block text-sm font-mono bg-blue-700 px-3 py-1 rounded">
@@ -47,6 +48,7 @@
                     <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded font-semibold">Calendar</a>
                     <a href="/schedule" class="hover:bg-blue-700 px-3 py-2 rounded">Schedule</a>
                     <a href="/recordings" class="hover:bg-blue-700 px-3 py-2 rounded">Recordings</a>
+                    <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded">Camera</a>
                     <a href="/settings" class="hover:bg-blue-700 px-3 py-2 rounded">Settings</a>
                 </div>
                 <div class="mt-4 pt-4 border-t border-blue-500 flex flex-wrap gap-2">
@@ -205,6 +207,17 @@
                         </div>
                     </div>
                     
+                    <!-- Video Capture Option -->
+                    <div class="border-t pt-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="modal-capture-video" class="mr-2">
+                            <span class="text-gray-700 font-medium">Also capture video from PTZ camera</span>
+                        </label>
+                        <p class="text-xs text-gray-500 mt-1 ml-6">
+                            Requires camera to be configured in Settings. Video will be saved to USB storage.
+                        </p>
+                    </div>
+
                     <!-- Duration Warning -->
                     <div id="modal-duration-warning" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
                         <strong>Warning:</strong> Recording duration exceeds 4 hours.
@@ -512,6 +525,7 @@
             document.getElementById('modal-duration').value = '60';
             document.getElementById('modal-notes').value = '';
             document.getElementById('modal-recurring').checked = false;
+            document.getElementById('modal-capture-video').checked = false;
             document.getElementById('modal-duration-warning').classList.add('hidden');
             toggleModalRecurring();
 
@@ -542,6 +556,7 @@
             const duration = parseInt(document.getElementById('modal-duration').value) * 60;
             const notes = document.getElementById('modal-notes').value;
             const isRecurring = document.getElementById('modal-recurring').checked;
+            const captureVideo = document.getElementById('modal-capture-video').checked;
             const allowOverride = duration > 14400;  // Auto-allow if > 4 hours (user saw warning)
 
             if (!name) {
@@ -582,7 +597,8 @@
                         notes,
                         is_recurring: isRecurring,
                         recurrence_pattern: recurrencePattern,
-                        allow_override: allowOverride
+                        allow_override: allowOverride,
+                        capture_video: captureVideo
                     })
                 });
 

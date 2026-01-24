@@ -12,6 +12,7 @@ import subprocess
 import sqlite3
 from datetime import datetime
 import recorder
+import video_recorder
 import scheduler
 import auth
 
@@ -28,10 +29,17 @@ auth.login_manager.init_app(app)
 # Initialize auth database
 auth.init_auth_db()
 
-# Global status tracker
+# Global status tracker for audio
 recording_status = {
     'is_recording': False,
     'current_job': None,
+    'start_time': None
+}
+
+# Global status tracker for video
+video_recording_status = {
+    'is_recording': False,
+    'current_file': None,
     'start_time': None
 }
 
@@ -167,20 +175,41 @@ def get_status():
 @app.route('/api/record/start', methods=['POST'])
 @login_required
 def start_recording():
-    """Manual recording start"""
+    """Manual recording start (audio, optionally with video)"""
     data = request.json
     duration = data.get('duration', 3600)  # Default 1 hour
     allow_override = data.get('allow_override', False)
-    
+    capture_video = data.get('capture_video', False)
+
     if recording_status['is_recording']:
         return jsonify({'error': 'Recording already in progress'}), 400
-    
+
     try:
         job_id = recorder.start_capture(duration, allow_override=allow_override)
         recording_status['is_recording'] = True
         recording_status['current_job'] = job_id
         recording_status['start_time'] = datetime.now().isoformat()
-        return jsonify({'success': True, 'job_id': job_id})
+
+        video_started = False
+        video_error = None
+
+        # Also start video recording if requested
+        if capture_video:
+            try:
+                video_recorder.start_video_recording(duration)
+                video_recording_status['is_recording'] = True
+                video_recording_status['start_time'] = datetime.now().isoformat()
+                video_started = True
+            except Exception as ve:
+                video_error = str(ve)
+                # Audio recording continues even if video fails
+
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'video_started': video_started,
+            'video_error': video_error
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -188,19 +217,52 @@ def start_recording():
 @app.route('/api/record/stop', methods=['POST'])
 @login_required
 def stop_recording():
-    """Manual recording stop"""
-    # Check actual recorder state, not cached status
-    if not recorder.is_recording():
+    """Manual recording stop (stops both audio and video if running)"""
+    audio_was_recording = recorder.is_recording()
+    video_was_recording = video_recorder.is_video_recording()
+
+    if not audio_was_recording and not video_was_recording:
         return jsonify({'error': 'No recording in progress'}), 400
-    
-    try:
-        recorder.stop_capture()
-        recording_status['is_recording'] = False
-        recording_status['current_job'] = None
-        recording_status['start_time'] = None
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+
+    audio_stopped = False
+    video_stopped = False
+    errors = []
+
+    # Stop audio recording
+    if audio_was_recording:
+        try:
+            recorder.stop_capture()
+            recording_status['is_recording'] = False
+            recording_status['current_job'] = None
+            recording_status['start_time'] = None
+            audio_stopped = True
+        except Exception as e:
+            errors.append(f"Audio: {str(e)}")
+
+    # Stop video recording
+    if video_was_recording:
+        try:
+            video_recorder.stop_video_recording()
+            video_recording_status['is_recording'] = False
+            video_recording_status['current_file'] = None
+            video_recording_status['start_time'] = None
+            video_stopped = True
+        except Exception as e:
+            errors.append(f"Video: {str(e)}")
+
+    if errors:
+        return jsonify({
+            'success': False,
+            'audio_stopped': audio_stopped,
+            'video_stopped': video_stopped,
+            'errors': errors
+        }), 500
+
+    return jsonify({
+        'success': True,
+        'audio_stopped': audio_stopped,
+        'video_stopped': video_stopped
+    })
 
 
 @app.route('/schedule')
@@ -224,7 +286,8 @@ def create_schedule():
             notes=data.get('notes', ''),
             is_recurring=data.get('is_recurring', False),
             recurrence_pattern=data.get('recurrence_pattern'),
-            allow_override=data.get('allow_override', False)
+            allow_override=data.get('allow_override', False),
+            capture_video=data.get('capture_video', False)
         )
         return jsonify({'success': True, 'job_id': job_id})
     except Exception as e:
@@ -899,6 +962,179 @@ def get_disk_space():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# Video Recording & Camera Control API
+# ============================================================================
+
+@app.route('/camera')
+@login_required
+def camera_page():
+    """Camera control and video recording interface"""
+    return render_template('camera.html')
+
+
+@app.route('/api/camera/preset/<int:preset_id>', methods=['GET', 'POST'])
+@login_required
+def call_camera_preset(preset_id):
+    """
+    Call a PTZ preset on the camera
+
+    Args:
+        preset_id: Preset number (1-255)
+    """
+    success, message = video_recorder.call_camera_preset(preset_id)
+
+    if success:
+        return jsonify({'success': True, 'message': message})
+    else:
+        return jsonify({'success': False, 'error': message}), 400
+
+
+@app.route('/api/camera/config', methods=['GET'])
+@login_required
+def get_camera_config():
+    """Get camera configuration"""
+    config = video_recorder.get_camera_config()
+
+    # Don't send password in plain text
+    config_safe = config.copy()
+    config_safe['camera_password'] = '****' if config['camera_password'] else ''
+
+    return jsonify(config_safe)
+
+
+@app.route('/api/camera/config', methods=['POST'])
+@login_required
+def set_camera_config():
+    """Save camera configuration"""
+    data = request.json
+
+    # Save each config value
+    if 'camera_ip' in data:
+        video_recorder.set_camera_config('camera_ip', data['camera_ip'].strip())
+
+    if 'camera_username' in data:
+        video_recorder.set_camera_config('camera_username', data['camera_username'].strip())
+
+    if 'camera_password' in data and data['camera_password'] != '****':
+        video_recorder.set_camera_config('camera_password', data['camera_password'])
+
+    if 'usb_storage_path' in data:
+        video_recorder.set_camera_config('usb_storage_path', data['usb_storage_path'].strip())
+
+    if 'preset_names' in data:
+        video_recorder.set_preset_names(data['preset_names'])
+
+    return jsonify({'success': True, 'message': 'Camera configuration saved'})
+
+
+@app.route('/api/camera/test', methods=['POST'])
+@login_required
+def test_camera_connection():
+    """Test connection to the camera"""
+    success, message = video_recorder.test_camera_connection()
+
+    if success:
+        return jsonify({'success': True, 'message': message})
+    else:
+        return jsonify({'success': False, 'error': message}), 400
+
+
+@app.route('/api/camera/stream', methods=['GET'])
+@login_required
+def get_stream_info():
+    """Get live stream viewing information"""
+    return jsonify(video_recorder.get_live_stream_info())
+
+
+@app.route('/api/video/status', methods=['GET'])
+@login_required
+def get_video_status():
+    """Get combined video recording and transcode status"""
+    # Sync with actual recorder state
+    actual_status = video_recorder.get_video_recording_status()
+    transcode_status = video_recorder.get_transcode_status()
+
+    # Update global status tracker
+    video_recording_status['is_recording'] = actual_status['is_recording']
+    video_recording_status['current_file'] = actual_status['current_file']
+    video_recording_status['start_time'] = actual_status['start_time']
+
+    return jsonify({
+        'recording': actual_status,
+        'transcode': transcode_status
+    })
+
+
+@app.route('/api/video/start', methods=['POST'])
+@login_required
+def start_video_recording():
+    """Start video recording from RTSP stream"""
+    data = request.json or {}
+    duration = data.get('duration')  # None for indefinite
+
+    if video_recorder.is_video_recording():
+        return jsonify({'error': 'Video recording already in progress'}), 400
+
+    try:
+        result = video_recorder.start_video_recording(duration)
+
+        video_recording_status['is_recording'] = True
+        video_recording_status['current_file'] = result['file']
+        video_recording_status['start_time'] = datetime.now().isoformat()
+
+        return jsonify({
+            'success': True,
+            'file': result['file'],
+            'timestamp': result['timestamp']
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/video/stop', methods=['POST'])
+@login_required
+def stop_video_recording():
+    """Stop video recording (gracefully finalize MP4)"""
+    if not video_recorder.is_video_recording():
+        return jsonify({'error': 'No video recording in progress'}), 400
+
+    try:
+        result = video_recorder.stop_video_recording()
+
+        video_recording_status['is_recording'] = False
+        video_recording_status['current_file'] = None
+        video_recording_status['start_time'] = None
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/video/storage', methods=['GET'])
+@login_required
+def get_video_storage():
+    """Get video storage disk space information"""
+    return jsonify(video_recorder.get_storage_info())
+
+
+@app.route('/api/video/files', methods=['GET'])
+@login_required
+def list_video_files():
+    """List video files (raw and processed)"""
+    return jsonify(video_recorder.list_video_files())
+
+
+@app.route('/api/video/transcode/cancel', methods=['POST'])
+@login_required
+def cancel_transcode():
+    """Cancel ongoing video transcoding"""
+    if video_recorder.cancel_transcode():
+        return jsonify({'success': True, 'message': 'Transcode cancelled'})
+    else:
+        return jsonify({'error': 'No transcoding in progress'}), 400
 
 
 if __name__ == '__main__':

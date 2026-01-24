@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Recorder - Camera</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
+        <div class="container mx-auto">
+            <!-- Mobile header -->
+            <div class="flex justify-between items-center">
+                <h1 class="text-xl md:text-2xl font-bold">Audio Recorder</h1>
+
+                <!-- Mobile menu button -->
+                <button id="mobile-menu-btn" class="md:hidden p-2 rounded hover:bg-blue-700" onclick="toggleMobileMenu()">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+
+                <!-- Desktop navigation -->
+                <div class="hidden md:flex items-center space-x-4 lg:space-x-6">
+                    <div class="space-x-3 lg:space-x-4">
+                        <a href="/" class="hover:underline">Calendar</a>
+                        <a href="/schedule" class="hover:underline">Schedule</a>
+                        <a href="/recordings" class="hover:underline">Recordings</a>
+                        <a href="/camera" class="hover:underline font-semibold">Camera</a>
+                        <a href="/settings" class="hover:underline">Settings</a>
+                    </div>
+                    <div id="current-datetime" class="hidden lg:block text-sm font-mono bg-blue-700 px-3 py-1 rounded">
+                        Loading...
+                    </div>
+                    <div id="disk-space" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer" title="Click for details">
+                        <span id="disk-text">Loading...</span>
+                    </div>
+                    <div class="border-l border-blue-400 pl-3 lg:pl-4 flex items-center space-x-2 lg:space-x-3">
+                        <span class="text-sm hidden lg:inline">{{ current_user.username }}</span>
+                        <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="hidden md:hidden mt-4 pt-4 border-t border-blue-500">
+                <div class="flex flex-col space-y-3">
+                    <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded">Calendar</a>
+                    <a href="/schedule" class="hover:bg-blue-700 px-3 py-2 rounded">Schedule</a>
+                    <a href="/recordings" class="hover:bg-blue-700 px-3 py-2 rounded">Recordings</a>
+                    <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded font-semibold">Camera</a>
+                    <a href="/settings" class="hover:bg-blue-700 px-3 py-2 rounded">Settings</a>
+                </div>
+                <div class="mt-4 pt-4 border-t border-blue-500 flex flex-wrap gap-2">
+                    <div id="disk-space-mobile" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
+                        <span id="disk-text-mobile">Loading...</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm">{{ current_user.username }}</span>
+                        <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <script>
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+    </script>
+
+    <div class="container mx-auto p-6">
+        <!-- Camera Not Configured Warning -->
+        <div id="camera-not-configured" class="hidden bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-6">
+            <strong>Camera not configured.</strong>
+            <a href="/settings#camera-settings" class="underline">Go to Settings</a> to configure your PTZOptics camera.
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- PTZ Preset Buttons -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">PTZ Presets</h2>
+                <p class="text-sm text-gray-600 mb-4">Click a preset to move the camera to that position.</p>
+
+                <div id="preset-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <!-- Preset buttons will be populated by JavaScript -->
+                </div>
+
+                <div id="preset-status" class="mt-4 text-sm text-gray-600 hidden">
+                    <span id="preset-status-text"></span>
+                </div>
+            </div>
+
+            <!-- Video Recording Control -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">Video Recording</h2>
+
+                <!-- Recording Status -->
+                <div id="video-status-indicator" class="flex items-center space-x-3 mb-4">
+                    <div id="video-status-light" class="w-4 h-4 rounded-full bg-gray-400"></div>
+                    <span id="video-status-text" class="text-lg font-medium text-gray-600">Idle</span>
+                </div>
+
+                <div id="video-recording-info" class="hidden bg-red-50 border border-red-200 rounded p-4 mb-4">
+                    <p class="text-sm text-gray-700">
+                        <strong>Started:</strong> <span id="video-start-time">--</span>
+                    </p>
+                    <p class="text-sm text-gray-700">
+                        <strong>File:</strong> <span id="video-current-file">--</span>
+                    </p>
+                </div>
+
+                <!-- Recording Toggle -->
+                <div class="flex items-center space-x-4 mb-4">
+                    <button id="video-start-btn" onclick="startVideoRecording()"
+                        class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <circle cx="10" cy="10" r="6"/>
+                        </svg>
+                        Start Video
+                    </button>
+                    <button id="video-stop-btn" onclick="stopVideoRecording()"
+                        class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded hidden">
+                        Stop Video
+                    </button>
+                </div>
+
+                <!-- Storage Info -->
+                <div id="video-storage-info" class="p-3 bg-gray-50 rounded text-sm">
+                    <strong>Video Storage:</strong>
+                    <span id="storage-status">Checking...</span>
+                </div>
+            </div>
+
+            <!-- Live Stream Info -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">View Live Stream</h2>
+                <p class="text-sm text-gray-600 mb-4">
+                    Use these commands to view the live camera feed on another device.
+                </p>
+
+                <div id="stream-info-container">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 font-medium mb-1">FFplay Command:</label>
+                        <div class="flex">
+                            <input type="text" id="ffplay-command" readonly
+                                class="flex-1 bg-gray-100 border rounded-l px-3 py-2 font-mono text-sm"
+                                value="Not configured">
+                            <button onclick="copyToClipboard('ffplay-command')"
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r">
+                                Copy
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-gray-700 font-medium mb-1">VLC / RTSP URL:</label>
+                        <div class="flex">
+                            <input type="text" id="rtsp-url" readonly
+                                class="flex-1 bg-gray-100 border rounded-l px-3 py-2 font-mono text-sm"
+                                value="Not configured">
+                            <button onclick="copyToClipboard('rtsp-url')"
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r">
+                                Copy
+                            </button>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-gray-500">
+                        Open VLC, go to Media → Open Network Stream, and paste the RTSP URL.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Transcode Status -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">Processing Status</h2>
+
+                <div id="transcode-idle" class="text-gray-600">
+                    <p>No video processing in progress.</p>
+                </div>
+
+                <div id="transcode-active" class="hidden">
+                    <div class="mb-2">
+                        <span class="font-medium">Processing:</span>
+                        <span id="transcode-file">--</span>
+                    </div>
+
+                    <div class="mb-2">
+                        <span class="font-medium">Status:</span>
+                        <span id="transcode-status-text" class="capitalize">--</span>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="w-full bg-gray-200 rounded-full h-4">
+                            <div id="transcode-progress-bar" class="bg-blue-500 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <p class="text-sm text-gray-600 mt-1">
+                            <span id="transcode-progress-text">0</span>% complete
+                        </p>
+                    </div>
+
+                    <button onclick="cancelTranscode()"
+                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-sm">
+                        Cancel Processing
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Video Files List -->
+        <div class="bg-white rounded-lg shadow-md p-6 mt-6">
+            <h2 class="text-xl font-semibold mb-4">Video Files</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Raw Files -->
+                <div>
+                    <h3 class="font-medium text-gray-700 mb-2">Raw Recordings (Pending Processing)</h3>
+                    <div id="raw-files-list" class="border rounded max-h-48 overflow-y-auto">
+                        <p class="p-3 text-gray-500 text-sm">Loading...</p>
+                    </div>
+                </div>
+
+                <!-- Processed Files -->
+                <div>
+                    <h3 class="font-medium text-gray-700 mb-2">Processed Videos</h3>
+                    <div id="processed-files-list" class="border rounded max-h-48 overflow-y-auto">
+                        <p class="p-3 text-gray-500 text-sm">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Preset configuration (will be loaded from server)
+        let presetNames = {};
+        const DEFAULT_PRESETS = {
+            1: 'Preset 1',
+            2: 'Preset 2',
+            3: 'Preset 3',
+            4: 'Preset 4',
+            5: 'Preset 5',
+            6: 'Preset 6',
+            7: 'Preset 7',
+            8: 'Preset 8',
+            9: 'Preset 9',
+            10: 'Preset 10'
+        };
+
+        // Update current date/time display
+        function updateDateTime() {
+            const now = new Date();
+            const options = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            };
+            document.getElementById('current-datetime').textContent =
+                now.toLocaleString('en-US', options);
+        }
+
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+
+        // Disk space monitoring (audio)
+        async function updateDiskSpace() {
+            try {
+                const response = await fetch('/api/system/disk');
+                const data = await response.json();
+
+                if (data.error) {
+                    document.getElementById('disk-text').textContent = 'Disk: Error';
+                    return;
+                }
+
+                const diskText = document.getElementById('disk-text');
+                const diskTextMobile = document.getElementById('disk-text-mobile');
+                const displayText = `${data.used_gb} / ${data.total_gb} GB`;
+
+                diskText.textContent = displayText;
+                if (diskTextMobile) diskTextMobile.textContent = displayText;
+
+            } catch (error) {
+                console.error('Error fetching disk space:', error);
+            }
+        }
+
+        updateDiskSpace();
+        setInterval(updateDiskSpace, 30000);
+
+        // Initialize page
+        window.addEventListener('DOMContentLoaded', () => {
+            loadCameraConfig();
+            loadStreamInfo();
+            updateVideoStatus();
+            loadVideoFiles();
+        });
+
+        // Poll status every 2 seconds
+        setInterval(updateVideoStatus, 2000);
+        setInterval(loadVideoFiles, 10000);
+
+        // Load camera configuration and preset names
+        async function loadCameraConfig() {
+            try {
+                const response = await fetch('/api/camera/config');
+                const config = await response.json();
+
+                if (!config.camera_ip) {
+                    document.getElementById('camera-not-configured').classList.remove('hidden');
+                }
+
+                presetNames = config.preset_names || {};
+                renderPresetButtons();
+
+            } catch (error) {
+                console.error('Error loading camera config:', error);
+            }
+        }
+
+        // Render preset buttons
+        function renderPresetButtons() {
+            const grid = document.getElementById('preset-grid');
+            grid.innerHTML = '';
+
+            // Show 10 preset buttons
+            for (let i = 1; i <= 10; i++) {
+                const name = presetNames[i] || DEFAULT_PRESETS[i];
+                const btn = document.createElement('button');
+                btn.className = 'bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded transition-colors';
+                btn.textContent = name;
+                btn.onclick = () => callPreset(i);
+                grid.appendChild(btn);
+            }
+        }
+
+        // Call camera preset
+        async function callPreset(presetId) {
+            const statusDiv = document.getElementById('preset-status');
+            const statusText = document.getElementById('preset-status-text');
+
+            statusDiv.classList.remove('hidden');
+            statusText.textContent = `Calling preset ${presetId}...`;
+            statusText.className = 'text-blue-600';
+
+            try {
+                const response = await fetch(`/api/camera/preset/${presetId}`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    statusText.textContent = `Preset ${presetId} called successfully`;
+                    statusText.className = 'text-green-600';
+                } else {
+                    statusText.textContent = `Error: ${result.error}`;
+                    statusText.className = 'text-red-600';
+                }
+            } catch (error) {
+                statusText.textContent = `Error: ${error}`;
+                statusText.className = 'text-red-600';
+            }
+
+            // Hide status after 3 seconds
+            setTimeout(() => {
+                statusDiv.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Load stream info
+        async function loadStreamInfo() {
+            try {
+                const response = await fetch('/api/camera/stream');
+                const info = await response.json();
+
+                if (info.configured) {
+                    document.getElementById('ffplay-command').value = info.ffplay_command;
+                    document.getElementById('rtsp-url').value = info.rtsp_url;
+                }
+            } catch (error) {
+                console.error('Error loading stream info:', error);
+            }
+        }
+
+        // Update video recording status
+        async function updateVideoStatus() {
+            try {
+                const response = await fetch('/api/video/status');
+                const data = await response.json();
+
+                const recording = data.recording;
+                const transcode = data.transcode;
+
+                // Update recording status
+                const statusLight = document.getElementById('video-status-light');
+                const statusText = document.getElementById('video-status-text');
+                const recordingInfo = document.getElementById('video-recording-info');
+                const startBtn = document.getElementById('video-start-btn');
+                const stopBtn = document.getElementById('video-stop-btn');
+
+                if (recording.is_recording) {
+                    statusLight.className = 'w-4 h-4 rounded-full bg-red-500 animate-pulse';
+                    statusText.textContent = 'Recording';
+                    statusText.className = 'text-lg font-medium text-red-600';
+
+                    if (recording.start_time) {
+                        document.getElementById('video-start-time').textContent =
+                            new Date(recording.start_time).toLocaleString();
+                    }
+                    if (recording.current_file) {
+                        const filename = recording.current_file.split('/').pop();
+                        document.getElementById('video-current-file').textContent = filename;
+                    }
+
+                    recordingInfo.classList.remove('hidden');
+                    startBtn.classList.add('hidden');
+                    stopBtn.classList.remove('hidden');
+                } else {
+                    statusLight.className = 'w-4 h-4 rounded-full bg-gray-400';
+                    statusText.textContent = 'Idle';
+                    statusText.className = 'text-lg font-medium text-gray-600';
+
+                    recordingInfo.classList.add('hidden');
+                    startBtn.classList.remove('hidden');
+                    stopBtn.classList.add('hidden');
+                }
+
+                // Update transcode status
+                const transcodeIdle = document.getElementById('transcode-idle');
+                const transcodeActive = document.getElementById('transcode-active');
+
+                if (transcode.is_processing) {
+                    transcodeIdle.classList.add('hidden');
+                    transcodeActive.classList.remove('hidden');
+
+                    document.getElementById('transcode-file').textContent = transcode.current_file || '--';
+                    document.getElementById('transcode-status-text').textContent = transcode.status || '--';
+                    document.getElementById('transcode-progress-text').textContent = transcode.progress_percent || 0;
+                    document.getElementById('transcode-progress-bar').style.width = `${transcode.progress_percent || 0}%`;
+                } else {
+                    transcodeIdle.classList.remove('hidden');
+                    transcodeActive.classList.add('hidden');
+                }
+
+                // Update storage info
+                updateStorageInfo();
+
+            } catch (error) {
+                console.error('Error updating video status:', error);
+            }
+        }
+
+        // Update storage info
+        async function updateStorageInfo() {
+            try {
+                const response = await fetch('/api/video/storage');
+                const info = await response.json();
+
+                const statusSpan = document.getElementById('storage-status');
+
+                if (info.mounted) {
+                    statusSpan.innerHTML = `${info.free_gb} GB free (~${info.hours_remaining} hrs recording)`;
+                    statusSpan.className = info.hours_remaining < 2 ? 'text-red-600' : 'text-green-600';
+                } else {
+                    statusSpan.innerHTML = `<span class="text-red-600">Not mounted: ${info.message}</span>`;
+                }
+            } catch (error) {
+                document.getElementById('storage-status').innerHTML = '<span class="text-red-600">Error checking storage</span>';
+            }
+        }
+
+        // Start video recording
+        async function startVideoRecording() {
+            try {
+                const response = await fetch('/api/video/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+
+                const result = await response.json();
+                if (result.error) {
+                    alert('Error: ' + result.error);
+                } else {
+                    updateVideoStatus();
+                }
+            } catch (error) {
+                alert('Error starting video: ' + error);
+            }
+        }
+
+        // Stop video recording
+        async function stopVideoRecording() {
+            if (!confirm('Stop video recording?')) return;
+
+            try {
+                const response = await fetch('/api/video/stop', {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+                if (result.error) {
+                    alert('Error: ' + result.error);
+                } else {
+                    updateVideoStatus();
+                }
+            } catch (error) {
+                alert('Error stopping video: ' + error);
+            }
+        }
+
+        // Cancel transcoding
+        async function cancelTranscode() {
+            if (!confirm('Cancel video processing? The raw file will be preserved.')) return;
+
+            try {
+                const response = await fetch('/api/video/transcode/cancel', {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                if (result.error) {
+                    alert('Error: ' + result.error);
+                }
+                updateVideoStatus();
+            } catch (error) {
+                alert('Error: ' + error);
+            }
+        }
+
+        // Load video files list
+        async function loadVideoFiles() {
+            try {
+                const response = await fetch('/api/video/files');
+                const files = await response.json();
+
+                // Render raw files
+                const rawList = document.getElementById('raw-files-list');
+                if (files.raw && files.raw.length > 0) {
+                    rawList.innerHTML = files.raw.map(f => `
+                        <div class="p-2 border-b last:border-b-0 text-sm">
+                            <div class="font-medium">${f.name}</div>
+                            <div class="text-gray-500">${f.size_mb} MB</div>
+                        </div>
+                    `).join('');
+                } else {
+                    rawList.innerHTML = '<p class="p-3 text-gray-500 text-sm">No raw files</p>';
+                }
+
+                // Render processed files
+                const processedList = document.getElementById('processed-files-list');
+                if (files.processed && files.processed.length > 0) {
+                    processedList.innerHTML = files.processed.map(f => `
+                        <div class="p-2 border-b last:border-b-0 text-sm">
+                            <div class="font-medium">${f.name}</div>
+                            <div class="text-gray-500">${f.size_mb} MB</div>
+                        </div>
+                    `).join('');
+                } else {
+                    processedList.innerHTML = '<p class="p-3 text-gray-500 text-sm">No processed files</p>';
+                }
+
+            } catch (error) {
+                console.error('Error loading video files:', error);
+            }
+        }
+
+        // Copy to clipboard
+        function copyToClipboard(elementId) {
+            const input = document.getElementById(elementId);
+            input.select();
+            document.execCommand('copy');
+
+            // Visual feedback
+            const btn = input.nextElementSibling;
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            btn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+            btn.classList.add('bg-green-500');
+
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.classList.remove('bg-green-500');
+                btn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

@@ -30,7 +30,7 @@ def init_database():
     """Initialize SQLite database for schedule storage"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS scheduled_jobs (
             id TEXT PRIMARY KEY,
@@ -44,9 +44,16 @@ def init_database():
             is_recurring INTEGER DEFAULT 0,
             recurrence_pattern TEXT,
             parent_template_id TEXT,
-            allow_override INTEGER DEFAULT 0
+            allow_override INTEGER DEFAULT 0,
+            capture_video INTEGER DEFAULT 0
         )
     ''')
+
+    # Add capture_video column if it doesn't exist (for upgrades)
+    try:
+        cursor.execute('ALTER TABLE scheduled_jobs ADD COLUMN capture_video INTEGER DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     
     # System configuration table
     cursor.execute('''
@@ -78,11 +85,12 @@ def init_database():
     conn.close()
 
 
-def create_job(start_time, duration, name='Unnamed Recording', notes='', 
-               is_recurring=False, recurrence_pattern=None, template_id=None, allow_override=False):
+def create_job(start_time, duration, name='Unnamed Recording', notes='',
+               is_recurring=False, recurrence_pattern=None, template_id=None,
+               allow_override=False, capture_video=False):
     """
     Create a new scheduled recording job
-    
+
     Args:
         start_time: ISO format datetime string (e.g., '2024-01-15T14:30:00')
         duration: Recording duration in seconds
@@ -92,29 +100,31 @@ def create_job(start_time, duration, name='Unnamed Recording', notes='',
         recurrence_pattern: JSON string with recurrence settings
         template_id: ID of template this job was created from (optional)
         allow_override: Allow duration longer than default limit
-    
+        capture_video: Also capture video from PTZ camera
+
     Returns:
         Job ID
     """
     # Parse start time
     dt = datetime.fromisoformat(start_time)
     job_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    
+
     # Store in database
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+
     cursor.execute('''
-        INSERT INTO scheduled_jobs 
-        (id, name, start_time, duration, created_at, notes, is_recurring, 
-         recurrence_pattern, parent_template_id, allow_override)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (job_id, name, start_time, duration, datetime.now().isoformat(), 
-          notes, 1 if is_recurring else 0, recurrence_pattern, template_id, 1 if allow_override else 0))
-    
+        INSERT INTO scheduled_jobs
+        (id, name, start_time, duration, created_at, notes, is_recurring,
+         recurrence_pattern, parent_template_id, allow_override, capture_video)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (job_id, name, start_time, duration, datetime.now().isoformat(),
+          notes, 1 if is_recurring else 0, recurrence_pattern, template_id,
+          1 if allow_override else 0, 1 if capture_video else 0))
+
     conn.commit()
     conn.close()
-    
+
     # Schedule with APScheduler
     if is_recurring and recurrence_pattern:
         # Parse recurrence pattern and create cron trigger
@@ -123,15 +133,15 @@ def create_job(start_time, duration, name='Unnamed Recording', notes='',
     else:
         # One-time job
         trigger = DateTrigger(run_date=dt)
-    
+
     scheduler.add_job(
         func=_execute_scheduled_recording,
         trigger=trigger,
         id=job_id,
-        args=[job_id, duration, allow_override],
+        args=[job_id, duration, allow_override, capture_video],
         replace_existing=True
     )
-    
+
     return job_id
 
 
@@ -232,42 +242,61 @@ def get_pending_jobs():
     return jobs
 
 
-def _execute_scheduled_recording(job_id, duration, allow_override=False):
+def _execute_scheduled_recording(job_id, duration, allow_override=False, capture_video=False):
     """
     Internal function executed by APScheduler to start recording
-    
+
     Args:
         job_id: Job identifier
         duration: Recording duration in seconds
         allow_override: Allow duration longer than default limit
+        capture_video: Also capture video from PTZ camera
     """
     print(f"Executing scheduled job: {job_id}")
-    
+
+    video_error = None
+
     try:
-        # Start recording with override flag
+        # Start audio recording with override flag
         recorder.start_capture(duration, allow_override=allow_override)
-        
+
+        # Start video recording if requested
+        if capture_video:
+            try:
+                import video_recorder
+                video_recorder.start_video_recording(duration)
+                print(f"Job {job_id}: Video recording started")
+            except Exception as ve:
+                video_error = str(ve)
+                print(f"Job {job_id}: Video recording failed: {ve}")
+                # Audio continues even if video fails
+
         # Update database status
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+
+        status_note = ""
+        if capture_video and video_error:
+            status_note = f"Audio OK, Video failed: {video_error}"
+
         cursor.execute('''
-            UPDATE scheduled_jobs 
-            SET status = 'completed', completed_at = ?
+            UPDATE scheduled_jobs
+            SET status = 'completed', completed_at = ?, notes = COALESCE(notes || ' ', '') || ?
             WHERE id = ?
-        ''', (datetime.now().isoformat(), job_id))
+        ''', (datetime.now().isoformat(), status_note, job_id))
         conn.commit()
         conn.close()
-        
+
         print(f"Job {job_id} completed successfully")
-        
+
     except Exception as e:
         print(f"Job {job_id} failed: {e}")
-        
+
         # Update database with error status
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute('''
-            UPDATE scheduled_jobs 
+            UPDATE scheduled_jobs
             SET status = 'failed', completed_at = ?, notes = ?
             WHERE id = ?
         ''', (datetime.now().isoformat(), str(e), job_id))
@@ -281,31 +310,33 @@ def restore_jobs_on_startup():
     Should be called when the application starts
     """
     jobs = get_pending_jobs()
-    
+
     for job in jobs:
         start_time = datetime.fromisoformat(job['start_time'])
-        
+        allow_override = bool(job.get('allow_override', 0))
+        capture_video = bool(job.get('capture_video', 0))
+
         # Handle recurring jobs
         if job.get('is_recurring') and job.get('recurrence_pattern'):
             pattern = json.loads(job['recurrence_pattern'])
             trigger = _create_cron_trigger(pattern, start_time.time())
-            
+
             scheduler.add_job(
                 func=_execute_scheduled_recording,
                 trigger=trigger,
                 id=job['id'],
-                args=[job['id'], job['duration'], bool(job.get('allow_override', 0))],
+                args=[job['id'], job['duration'], allow_override, capture_video],
                 replace_existing=True
             )
             print(f"Restored recurring job: {job['id']} - {pattern['type']}")
-        
+
         # Handle one-time jobs
         elif start_time > datetime.now():
             scheduler.add_job(
                 func=_execute_scheduled_recording,
                 trigger=DateTrigger(run_date=start_time),
                 id=job['id'],
-                args=[job['id'], job['duration'], bool(job.get('allow_override', 0))],
+                args=[job['id'], job['duration'], allow_override, capture_video],
                 replace_existing=True
             )
             print(f"Restored scheduled job: {job['id']} at {start_time}")
@@ -314,7 +345,7 @@ def restore_jobs_on_startup():
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE scheduled_jobs 
+                UPDATE scheduled_jobs
                 SET status = 'missed'
                 WHERE id = ?
             ''', (job['id'],))

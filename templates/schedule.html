@@ -26,6 +26,7 @@
                         <a href="/" class="hover:underline">Calendar</a>
                         <a href="/schedule" class="hover:underline font-semibold">Schedule</a>
                         <a href="/recordings" class="hover:underline">Recordings</a>
+                        <a href="/camera" class="hover:underline">Camera</a>
                         <a href="/settings" class="hover:underline">Settings</a>
                     </div>
                     <div id="current-datetime" class="hidden lg:block text-sm font-mono bg-blue-700 px-3 py-1 rounded">
@@ -47,6 +48,7 @@
                     <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded">Calendar</a>
                     <a href="/schedule" class="hover:bg-blue-700 px-3 py-2 rounded font-semibold">Schedule</a>
                     <a href="/recordings" class="hover:bg-blue-700 px-3 py-2 rounded">Recordings</a>
+                    <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded">Camera</a>
                     <a href="/settings" class="hover:bg-blue-700 px-3 py-2 rounded">Settings</a>
                 </div>
                 <div class="mt-4 pt-4 border-t border-blue-500 flex flex-wrap gap-2">
@@ -154,6 +156,17 @@
                             class="w-full border border-gray-300 rounded px-3 py-2">
                     </div>
                 </div>
+            </div>
+
+            <!-- Video Capture Option -->
+            <div class="mt-4 border-t pt-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="capture-video" class="mr-2">
+                    <span class="text-gray-700 font-medium">Also capture video from PTZ camera</span>
+                </label>
+                <p class="text-xs text-gray-500 mt-1 ml-6">
+                    Requires camera to be configured in Settings. Video will be saved to USB storage.
+                </p>
             </div>
 
             <!-- Duration Warning -->
@@ -301,6 +314,7 @@
             const duration = parseInt(document.getElementById('duration').value) * 60;
             const notes = document.getElementById('notes').value;
             const isRecurring = document.getElementById('is-recurring').checked;
+            const captureVideo = document.getElementById('capture-video').checked;
             const allowOverride = duration > 14400;  // Auto-allow if > 4 hours (user saw warning)
 
             if (!name || !startTime) {
@@ -345,7 +359,8 @@
                         notes,
                         is_recurring: isRecurring,
                         recurrence_pattern: recurrencePattern,
-                        allow_override: allowOverride
+                        allow_override: allowOverride,
+                        capture_video: captureVideo
                     })
                 });
 
