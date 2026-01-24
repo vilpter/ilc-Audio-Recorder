@@ -1,8 +1,8 @@
-# ILC Audio & Video Recorder
+# Church Recording
 
 **Headless Dual-Mono Audio + PTZ Video Recording System for Raspberry Pi**
 
-A professional-grade dual-channel audio and video recording system with web-based scheduling and management for Raspberry Pi. Supports Behringer UCA202 USB audio interface and PTZOptics cameras for synchronized A/V capture.
+A professional-grade dual-channel audio and video recording system with web-based scheduling and management for Raspberry Pi. Supports Behringer UCA202 USB audio interface and PTZOptics cameras for synchronized A/V capture. Designed for church services and similar recurring event recording.
 
 ## Features
 
@@ -32,14 +32,13 @@ A professional-grade dual-channel audio and video recording system with web-base
 - Optional video capture with audio schedules
 
 ### Web Interface
-- Dashboard with real-time status
-- Camera control page for PTZ presets and video recording
-- Schedule management page
+- Schedule page with calendar view and instant scheduling
+- New/In Progress page for unified recording controls
+- Recordings page with audio and video file browser
+- Settings page with audio and camera configuration
 - Visual calendar with color-coded events
-- File browser with download/delete and batch operations
 - Live date/time display on all pages
 - Disk space monitoring in navigation ribbon
-- Settings page with audio and camera configuration
 - Complete backup/restore system
 - User authentication with login/logout
 
@@ -155,27 +154,23 @@ sudo systemctl start audio-recorder
 
 ## Usage
 
-### Calendar (/)
+### Schedule (/)
 - Visual multi-week calendar view
 - See all upcoming recordings
-- Click any day to create a new schedule
+- Click any day to create or edit schedules
 - Option to capture video with audio schedules
+- One-time and recurring recording support
 
-### Schedule (/schedule)
-- Create one-time scheduled recordings
-- Create recurring schedules
-- View and delete scheduled jobs
-- Option to capture video with audio
-
-### Camera (/camera)
+### New/In Progress (/camera)
+- Unified recording controls: Audio Only, Video Only, or Both
+- Combined audio/video status display
 - Control PTZ camera presets (10 customizable positions)
-- Start/stop video recording manually
-- View transcode progress for processed files
+- View video transcode progress
 - Access live stream URLs for external players
-- Browse raw and processed video files
 
 ### Recordings (/recordings)
 - Browse all recorded audio files
+- Browse raw and processed video files
 - Batch select for bulk download or delete
 - Download recordings as ZIP archive
 
@@ -206,10 +201,9 @@ audio-recorder/
 │   ├── asound.conf           # ALSA configuration
 │   └── 85-usb-audio.rules    # udev rules for USB audio
 └── templates/                # HTML templates
-    ├── calendar.html         # Calendar view (home page)
-    ├── schedule.html         # Schedule manager
-    ├── camera.html           # PTZ camera control
-    ├── recordings.html       # File browser
+    ├── calendar.html         # Schedule page (home page with calendar)
+    ├── camera.html           # New/In Progress (recording controls)
+    ├── recordings.html       # Audio and video file browser
     ├── settings.html         # Settings page
     ├── login.html            # Login page
     ├── setup.html            # Initial setup
@@ -433,13 +427,22 @@ On first access, you'll be prompted to create an admin account:
 
 ## Changelog
 
-### v1.4.0 (Current)
+### v1.5.0 (Current)
+- Rebranded from "Audio Recorder" to "Church Recording"
+- Renamed Calendar page to "Schedule" - calendar-based scheduling
+- Renamed Camera page to "New/In Progress" - unified recording controls
+- Added Audio Only, Video Only, and Both recording buttons
+- Added combined audio/video status panel
+- Added mobile page indicator
+- Removed standalone Schedule page (consolidated into calendar modal)
+- Moved Quick Record from Settings to New/In Progress page
+
+### v1.4.0
 - Added PTZOptics camera integration for synchronized A/V recording
-- Added Camera tab for PTZ preset control and video recording
 - RTSP stream capture with zero CPU re-encoding (`-c copy`)
 - Hardware-accelerated transcoding using Raspberry Pi GPU
 - USB storage support for video files
-- Video capture checkbox in Calendar and Schedule pages
+- Video capture checkbox in Schedule page
 - Real-time transcode progress tracking
 - Live stream viewing with copyable URLs
 
@@ -447,20 +450,6 @@ On first access, you'll be prompted to create an admin account:
 - Added user authentication (login/logout)
 - Added batch file operations (multi-select, bulk download/delete)
 - Added disk space monitoring in navigation ribbon
-- Calendar is now the root URL
-- Removed templates feature for simplicity
-
-### v1.2.0
-- Added configurable recording filename format
-- Added calendar day click to create schedules
-- Added complete backup/restore system
-
-### v1.1.0
-- Added automated installation script
-- Fixed username detection for systemd service
-
-### v1.0.0
-- Initial release with core recording and scheduling features
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
@@ -469,22 +458,19 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 ### Planned Features
 - Audio post-processing (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate
 - Note the last date of download for files
-- Video file management in Recordings page
 
-### Recently Completed (v1.4.0)
+### Recently Completed (v1.5.0)
+- Unified recording controls (Audio/Video/Both)
+- Combined status panel for audio and video
+- Simplified navigation and workflow
+- Mobile-friendly page indicators
+
+### Previously Completed (v1.4.0)
 - PTZOptics camera integration with video recording
 - RTSP stream capture with hardware-accelerated transcoding
 - Video capture option for scheduled recordings
 - Camera settings page with preset naming
 - Live stream URLs for external players
-
-### Previously Completed (v1.3.0)
-- Batch file operations (multi-select, bulk download/delete)
-- Disk space monitoring in navigation ribbon
-- Calendar event delete button
-- Event name as heading instead of "Event Details"
-- End times displayed as time ranges
-- Templates feature removed for simplicity
 
 ## Built With
 
@@ -500,5 +486,5 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
 ---
 
-**Version:** 1.4.0
+**Version:** 1.5.0
 **Last Updated:** 2026-01-24

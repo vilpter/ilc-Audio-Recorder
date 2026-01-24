@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Recorder - Settings</title>
+    <title>Church Recording - Settings</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -11,7 +11,10 @@
         <div class="container mx-auto">
             <!-- Mobile header -->
             <div class="flex justify-between items-center">
-                <h1 class="text-xl md:text-2xl font-bold">Audio Recorder</h1>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold">Church Recording</h1>
+                    <span class="text-sm md:hidden opacity-75">Settings</span>
+                </div>
 
                 <!-- Mobile menu button -->
                 <button id="mobile-menu-btn" class="md:hidden p-2 rounded hover:bg-blue-700" onclick="toggleMobileMenu()">
@@ -23,10 +26,9 @@
                 <!-- Desktop navigation -->
                 <div class="hidden md:flex items-center space-x-4 lg:space-x-6">
                     <div class="space-x-3 lg:space-x-4">
-                        <a href="/" class="hover:underline">Calendar</a>
-                        <a href="/schedule" class="hover:underline">Schedule</a>
+                        <a href="/" class="hover:underline">Schedule</a>
+                        <a href="/camera" class="hover:underline">New/In Progress</a>
                         <a href="/recordings" class="hover:underline">Recordings</a>
-                        <a href="/camera" class="hover:underline">Camera</a>
                         <a href="/settings" class="hover:underline font-semibold">Settings</a>
                     </div>
                     <div id="current-datetime" class="hidden lg:block text-sm font-mono bg-blue-700 px-3 py-1 rounded">
@@ -45,10 +47,9 @@
             <!-- Mobile menu -->
             <div id="mobile-menu" class="hidden md:hidden mt-4 pt-4 border-t border-blue-500">
                 <div class="flex flex-col space-y-3">
-                    <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded">Calendar</a>
-                    <a href="/schedule" class="hover:bg-blue-700 px-3 py-2 rounded">Schedule</a>
+                    <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded">Schedule</a>
+                    <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded">New/In Progress</a>
                     <a href="/recordings" class="hover:bg-blue-700 px-3 py-2 rounded">Recordings</a>
-                    <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded">Camera</a>
                     <a href="/settings" class="hover:bg-blue-700 px-3 py-2 rounded font-semibold">Settings</a>
                 </div>
                 <div class="mt-4 pt-4 border-t border-blue-500 flex flex-wrap gap-2">
@@ -72,61 +73,6 @@
     </script>
 
     <div class="container mx-auto p-6">
-        <!-- Recording Status & Quick Record -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <!-- Status Card -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold mb-4">Recording Status</h2>
-
-                <div id="status-indicator" class="flex items-center space-x-3 mb-4">
-                    <div id="status-light" class="w-4 h-4 rounded-full bg-gray-400"></div>
-                    <span id="status-text" class="text-lg font-medium text-gray-600">Idle</span>
-                </div>
-
-                <div id="recording-info" class="hidden bg-blue-50 border border-blue-200 rounded p-4 mb-4">
-                    <p class="text-sm text-gray-700">
-                        <strong>Started:</strong> <span id="rec-start-time">--</span>
-                    </p>
-                    <p class="text-sm text-gray-700">
-                        <strong>Job ID:</strong> <span id="rec-job-id">--</span>
-                    </p>
-                </div>
-
-                <!-- Manual Controls -->
-                <div class="flex space-x-4">
-                    <button id="start-btn" onclick="startRecording()"
-                        class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-6 rounded">
-                        Start Recording
-                    </button>
-                    <button id="stop-btn" onclick="stopRecording()"
-                        class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded hidden">
-                        Stop Recording
-                    </button>
-                </div>
-            </div>
-
-            <!-- Quick Record Card -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold mb-4">Quick Record</h2>
-                <div class="space-y-3">
-                    <div class="flex items-center space-x-4">
-                        <label class="text-gray-700">Duration (minutes):</label>
-                        <input type="number" id="duration-input" value="60" min="1"
-                            class="border border-gray-300 rounded px-3 py-2 w-24"
-                            oninput="checkDurationWarning()">
-                    </div>
-                    <div id="duration-warning" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                        <strong>Warning:</strong> Recording duration exceeds 4 hours.
-                        Long recordings require significant disk space (~345 MB/hour per channel).
-                    </div>
-                    <button onclick="quickRecord()"
-                        class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-6 rounded">
-                        Start Quick Record
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <!-- Audio Device Configuration -->
         <div class="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 class="text-xl font-semibold mb-4">Audio Device Configuration</h2>
@@ -498,104 +444,8 @@
             loadCurrentConfig();
             loadDevices();
             loadLogs();
-            updateRecordingStatus();
             loadCameraConfig();
         });
-
-        // Poll recording status every 2 seconds
-        setInterval(updateRecordingStatus, 2000);
-
-        async function updateRecordingStatus() {
-            try {
-                const response = await fetch('/api/status');
-                const status = await response.json();
-
-                const statusLight = document.getElementById('status-light');
-                const statusText = document.getElementById('status-text');
-                const recordingInfo = document.getElementById('recording-info');
-                const startBtn = document.getElementById('start-btn');
-                const stopBtn = document.getElementById('stop-btn');
-
-                if (status.is_recording) {
-                    statusLight.className = 'w-4 h-4 rounded-full bg-red-500 animate-pulse';
-                    statusText.textContent = 'Recording';
-                    statusText.className = 'text-lg font-medium text-red-600';
-
-                    document.getElementById('rec-start-time').textContent =
-                        new Date(status.start_time).toLocaleString();
-                    document.getElementById('rec-job-id').textContent = status.current_job;
-
-                    recordingInfo.classList.remove('hidden');
-                    startBtn.classList.add('hidden');
-                    stopBtn.classList.remove('hidden');
-                } else {
-                    statusLight.className = 'w-4 h-4 rounded-full bg-gray-400';
-                    statusText.textContent = 'Idle';
-                    statusText.className = 'text-lg font-medium text-gray-600';
-
-                    recordingInfo.classList.add('hidden');
-                    startBtn.classList.remove('hidden');
-                    stopBtn.classList.add('hidden');
-                }
-            } catch (error) {
-                console.error('Error fetching status:', error);
-            }
-        }
-
-        function checkDurationWarning() {
-            const duration = parseInt(document.getElementById('duration-input').value) || 0;
-            const warning = document.getElementById('duration-warning');
-            if (duration > 240) {
-                warning.classList.remove('hidden');
-            } else {
-                warning.classList.add('hidden');
-            }
-        }
-
-        async function startRecording() {
-            const duration = parseInt(document.getElementById('duration-input').value) * 60;
-            const allowOverride = duration > 14400;
-
-            try {
-                const response = await fetch('/api/record/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ duration, allow_override: allowOverride })
-                });
-
-                const result = await response.json();
-                if (result.error) {
-                    alert('Error: ' + result.error);
-                } else {
-                    updateRecordingStatus();
-                }
-            } catch (error) {
-                alert('Error starting recording: ' + error);
-            }
-        }
-
-        async function stopRecording() {
-            if (!confirm('Stop the current recording?')) return;
-
-            try {
-                const response = await fetch('/api/record/stop', {
-                    method: 'POST'
-                });
-
-                const result = await response.json();
-                if (result.error) {
-                    alert('Error: ' + result.error);
-                } else {
-                    updateRecordingStatus();
-                }
-            } catch (error) {
-                alert('Error stopping recording: ' + error);
-            }
-        }
-
-        function quickRecord() {
-            startRecording();
-        }
 
         async function loadCurrentConfig() {
             try {

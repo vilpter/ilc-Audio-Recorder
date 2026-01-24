@@ -265,14 +265,6 @@ def stop_recording():
     })
 
 
-@app.route('/schedule')
-@login_required
-def schedule_page():
-    """Scheduling interface"""
-    jobs = scheduler.get_all_jobs()
-    return render_template('schedule.html', jobs=jobs)
-
-
 @app.route('/api/schedule', methods=['POST'])
 @login_required
 def create_schedule():

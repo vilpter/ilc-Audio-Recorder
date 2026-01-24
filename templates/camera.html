@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Recorder - Camera</title>
+    <title>Church Recording - New/In Progress</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -11,7 +11,10 @@
         <div class="container mx-auto">
             <!-- Mobile header -->
             <div class="flex justify-between items-center">
-                <h1 class="text-xl md:text-2xl font-bold">Audio Recorder</h1>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold">Church Recording</h1>
+                    <span class="text-sm md:hidden opacity-75">New/In Progress</span>
+                </div>
 
                 <!-- Mobile menu button -->
                 <button id="mobile-menu-btn" class="md:hidden p-2 rounded hover:bg-blue-700" onclick="toggleMobileMenu()">
@@ -23,10 +26,9 @@
                 <!-- Desktop navigation -->
                 <div class="hidden md:flex items-center space-x-4 lg:space-x-6">
                     <div class="space-x-3 lg:space-x-4">
-                        <a href="/" class="hover:underline">Calendar</a>
-                        <a href="/schedule" class="hover:underline">Schedule</a>
+                        <a href="/" class="hover:underline">Schedule</a>
+                        <a href="/camera" class="hover:underline font-semibold">New/In Progress</a>
                         <a href="/recordings" class="hover:underline">Recordings</a>
-                        <a href="/camera" class="hover:underline font-semibold">Camera</a>
                         <a href="/settings" class="hover:underline">Settings</a>
                     </div>
                     <div id="current-datetime" class="hidden lg:block text-sm font-mono bg-blue-700 px-3 py-1 rounded">
@@ -45,10 +47,9 @@
             <!-- Mobile menu -->
             <div id="mobile-menu" class="hidden md:hidden mt-4 pt-4 border-t border-blue-500">
                 <div class="flex flex-col space-y-3">
-                    <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded">Calendar</a>
-                    <a href="/schedule" class="hover:bg-blue-700 px-3 py-2 rounded">Schedule</a>
+                    <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded">Schedule</a>
+                    <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded font-semibold">New/In Progress</a>
                     <a href="/recordings" class="hover:bg-blue-700 px-3 py-2 rounded">Recordings</a>
-                    <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded font-semibold">Camera</a>
                     <a href="/settings" class="hover:bg-blue-700 px-3 py-2 rounded">Settings</a>
                 </div>
                 <div class="mt-4 pt-4 border-t border-blue-500 flex flex-wrap gap-2">
@@ -78,6 +79,101 @@
             <a href="/settings#camera-settings" class="underline">Go to Settings</a> to configure your PTZOptics camera.
         </div>
 
+        <!-- Combined Recording Status -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Recording Status</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Audio Status -->
+                <div class="border-r-0 md:border-r md:pr-6">
+                    <h3 class="font-medium text-gray-700 mb-3">Audio</h3>
+                    <div id="audio-status-indicator" class="flex items-center space-x-3 mb-3">
+                        <div id="audio-status-light" class="w-4 h-4 rounded-full bg-gray-400"></div>
+                        <span id="audio-status-text" class="text-lg font-medium text-gray-600">Idle</span>
+                    </div>
+                    <div id="audio-recording-info" class="hidden bg-blue-50 border border-blue-200 rounded p-3 text-sm">
+                        <p><strong>Started:</strong> <span id="audio-start-time">--</span></p>
+                        <p><strong>Job ID:</strong> <span id="audio-job-id">--</span></p>
+                    </div>
+                </div>
+
+                <!-- Video Status -->
+                <div class="md:pl-6">
+                    <h3 class="font-medium text-gray-700 mb-3">Video</h3>
+                    <div id="video-status-indicator" class="flex items-center space-x-3 mb-3">
+                        <div id="video-status-light" class="w-4 h-4 rounded-full bg-gray-400"></div>
+                        <span id="video-status-text" class="text-lg font-medium text-gray-600">Idle</span>
+                    </div>
+                    <div id="video-recording-info" class="hidden bg-red-50 border border-red-200 rounded p-3 text-sm">
+                        <p><strong>Started:</strong> <span id="video-start-time">--</span></p>
+                        <p><strong>File:</strong> <span id="video-current-file">--</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Unified Recording Controls -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Start Recording</h2>
+
+            <div class="mb-4">
+                <label class="block text-gray-700 mb-2">Duration (minutes):</label>
+                <input type="number" id="duration-input" value="60" min="1"
+                    class="border border-gray-300 rounded px-3 py-2 w-32"
+                    oninput="checkDurationWarning()">
+            </div>
+
+            <div id="duration-warning" class="hidden bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+                <strong>Warning:</strong> Recording duration exceeds 4 hours.
+                Long recordings require significant disk space (~345 MB/hour per audio channel).
+            </div>
+
+            <!-- Recording Type Buttons -->
+            <div id="start-buttons" class="flex flex-wrap gap-3 mb-4">
+                <button onclick="startRecording('audio')"
+                    class="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
+                    </svg>
+                    Audio Only
+                </button>
+                <button onclick="startRecording('video')"
+                    class="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
+                    </svg>
+                    Video Only
+                </button>
+                <button onclick="startRecording('both')"
+                    class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-6 rounded flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <circle cx="10" cy="10" r="6"/>
+                    </svg>
+                    Audio + Video
+                </button>
+            </div>
+
+            <!-- Stop Button (shown when recording) -->
+            <div id="stop-buttons" class="hidden flex flex-wrap gap-3 mb-4">
+                <button onclick="stopRecording()"
+                    class="bg-gray-700 hover:bg-gray-800 text-white font-semibold py-3 px-6 rounded">
+                    Stop All Recording
+                </button>
+            </div>
+
+            <!-- Storage Info -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
+                <div class="p-3 bg-gray-50 rounded">
+                    <strong>Audio Storage:</strong>
+                    <span id="audio-storage-status">Checking...</span>
+                </div>
+                <div class="p-3 bg-gray-50 rounded">
+                    <strong>Video Storage:</strong>
+                    <span id="video-storage-status">Checking...</span>
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- PTZ Preset Buttons -->
             <div class="bg-white rounded-lg shadow-md p-6">
@@ -90,47 +186,6 @@
 
                 <div id="preset-status" class="mt-4 text-sm text-gray-600 hidden">
                     <span id="preset-status-text"></span>
-                </div>
-            </div>
-
-            <!-- Video Recording Control -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold mb-4">Video Recording</h2>
-
-                <!-- Recording Status -->
-                <div id="video-status-indicator" class="flex items-center space-x-3 mb-4">
-                    <div id="video-status-light" class="w-4 h-4 rounded-full bg-gray-400"></div>
-                    <span id="video-status-text" class="text-lg font-medium text-gray-600">Idle</span>
-                </div>
-
-                <div id="video-recording-info" class="hidden bg-red-50 border border-red-200 rounded p-4 mb-4">
-                    <p class="text-sm text-gray-700">
-                        <strong>Started:</strong> <span id="video-start-time">--</span>
-                    </p>
-                    <p class="text-sm text-gray-700">
-                        <strong>File:</strong> <span id="video-current-file">--</span>
-                    </p>
-                </div>
-
-                <!-- Recording Toggle -->
-                <div class="flex items-center space-x-4 mb-4">
-                    <button id="video-start-btn" onclick="startVideoRecording()"
-                        class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded flex items-center">
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                            <circle cx="10" cy="10" r="6"/>
-                        </svg>
-                        Start Video
-                    </button>
-                    <button id="video-stop-btn" onclick="stopVideoRecording()"
-                        class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded hidden">
-                        Stop Video
-                    </button>
-                </div>
-
-                <!-- Storage Info -->
-                <div id="video-storage-info" class="p-3 bg-gray-50 rounded text-sm">
-                    <strong>Video Storage:</strong>
-                    <span id="storage-status">Checking...</span>
                 </div>
             </div>
 
@@ -173,63 +228,40 @@
                     </p>
                 </div>
             </div>
-
-            <!-- Transcode Status -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold mb-4">Processing Status</h2>
-
-                <div id="transcode-idle" class="text-gray-600">
-                    <p>No video processing in progress.</p>
-                </div>
-
-                <div id="transcode-active" class="hidden">
-                    <div class="mb-2">
-                        <span class="font-medium">Processing:</span>
-                        <span id="transcode-file">--</span>
-                    </div>
-
-                    <div class="mb-2">
-                        <span class="font-medium">Status:</span>
-                        <span id="transcode-status-text" class="capitalize">--</span>
-                    </div>
-
-                    <div class="mb-4">
-                        <div class="w-full bg-gray-200 rounded-full h-4">
-                            <div id="transcode-progress-bar" class="bg-blue-500 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
-                        </div>
-                        <p class="text-sm text-gray-600 mt-1">
-                            <span id="transcode-progress-text">0</span>% complete
-                        </p>
-                    </div>
-
-                    <button onclick="cancelTranscode()"
-                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-sm">
-                        Cancel Processing
-                    </button>
-                </div>
-            </div>
         </div>
 
-        <!-- Video Files List -->
+        <!-- Transcode Status -->
         <div class="bg-white rounded-lg shadow-md p-6 mt-6">
-            <h2 class="text-xl font-semibold mb-4">Video Files</h2>
+            <h2 class="text-xl font-semibold mb-4">Video Processing Status</h2>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Raw Files -->
-                <div>
-                    <h3 class="font-medium text-gray-700 mb-2">Raw Recordings (Pending Processing)</h3>
-                    <div id="raw-files-list" class="border rounded max-h-48 overflow-y-auto">
-                        <p class="p-3 text-gray-500 text-sm">Loading...</p>
-                    </div>
+            <div id="transcode-idle" class="text-gray-600">
+                <p>No video processing in progress.</p>
+            </div>
+
+            <div id="transcode-active" class="hidden">
+                <div class="mb-2">
+                    <span class="font-medium">Processing:</span>
+                    <span id="transcode-file">--</span>
                 </div>
 
-                <!-- Processed Files -->
-                <div>
-                    <h3 class="font-medium text-gray-700 mb-2">Processed Videos</h3>
-                    <div id="processed-files-list" class="border rounded max-h-48 overflow-y-auto">
-                        <p class="p-3 text-gray-500 text-sm">Loading...</p>
-                    </div>
+                <div class="mb-2">
+                    <span class="font-medium">Status:</span>
+                    <span id="transcode-status-text" class="capitalize">--</span>
                 </div>
+
+                <div class="mb-4">
+                    <div class="w-full bg-gray-200 rounded-full h-4">
+                        <div id="transcode-progress-bar" class="bg-blue-500 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-1">
+                        <span id="transcode-progress-text">0</span>% complete
+                    </p>
+                </div>
+
+                <button onclick="cancelTranscode()"
+                    class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-sm">
+                    Cancel Processing
+                </button>
             </div>
         </div>
     </div>
@@ -300,13 +332,11 @@
         window.addEventListener('DOMContentLoaded', () => {
             loadCameraConfig();
             loadStreamInfo();
-            updateVideoStatus();
-            loadVideoFiles();
+            updateAllStatus();
         });
 
         // Poll status every 2 seconds
-        setInterval(updateVideoStatus, 2000);
-        setInterval(loadVideoFiles, 10000);
+        setInterval(updateAllStatus, 2000);
 
         // Load camera configuration and preset names
         async function loadCameraConfig() {
@@ -390,48 +420,72 @@
             }
         }
 
-        // Update video recording status
-        async function updateVideoStatus() {
+        // Update all recording status (audio + video)
+        async function updateAllStatus() {
             try {
-                const response = await fetch('/api/video/status');
-                const data = await response.json();
+                // Fetch audio status
+                const audioResponse = await fetch('/api/status');
+                const audioStatus = await audioResponse.json();
 
-                const recording = data.recording;
-                const transcode = data.transcode;
+                // Fetch video status
+                const videoResponse = await fetch('/api/video/status');
+                const videoData = await videoResponse.json();
+                const videoRecording = videoData.recording;
+                const transcode = videoData.transcode;
 
-                // Update recording status
-                const statusLight = document.getElementById('video-status-light');
-                const statusText = document.getElementById('video-status-text');
-                const recordingInfo = document.getElementById('video-recording-info');
-                const startBtn = document.getElementById('video-start-btn');
-                const stopBtn = document.getElementById('video-stop-btn');
+                // Update audio status
+                const audioStatusLight = document.getElementById('audio-status-light');
+                const audioStatusText = document.getElementById('audio-status-text');
+                const audioRecordingInfo = document.getElementById('audio-recording-info');
 
-                if (recording.is_recording) {
-                    statusLight.className = 'w-4 h-4 rounded-full bg-red-500 animate-pulse';
-                    statusText.textContent = 'Recording';
-                    statusText.className = 'text-lg font-medium text-red-600';
+                if (audioStatus.is_recording) {
+                    audioStatusLight.className = 'w-4 h-4 rounded-full bg-green-500 animate-pulse';
+                    audioStatusText.textContent = 'Recording';
+                    audioStatusText.className = 'text-lg font-medium text-green-600';
 
-                    if (recording.start_time) {
+                    document.getElementById('audio-start-time').textContent =
+                        new Date(audioStatus.start_time).toLocaleString();
+                    document.getElementById('audio-job-id').textContent = audioStatus.current_job || '--';
+
+                    audioRecordingInfo.classList.remove('hidden');
+                } else {
+                    audioStatusLight.className = 'w-4 h-4 rounded-full bg-gray-400';
+                    audioStatusText.textContent = 'Idle';
+                    audioStatusText.className = 'text-lg font-medium text-gray-600';
+                    audioRecordingInfo.classList.add('hidden');
+                }
+
+                // Update video status
+                const videoStatusLight = document.getElementById('video-status-light');
+                const videoStatusText = document.getElementById('video-status-text');
+                const videoRecordingInfo = document.getElementById('video-recording-info');
+
+                if (videoRecording.is_recording) {
+                    videoStatusLight.className = 'w-4 h-4 rounded-full bg-red-500 animate-pulse';
+                    videoStatusText.textContent = 'Recording';
+                    videoStatusText.className = 'text-lg font-medium text-red-600';
+
+                    if (videoRecording.start_time) {
                         document.getElementById('video-start-time').textContent =
-                            new Date(recording.start_time).toLocaleString();
+                            new Date(videoRecording.start_time).toLocaleString();
                     }
-                    if (recording.current_file) {
-                        const filename = recording.current_file.split('/').pop();
+                    if (videoRecording.current_file) {
+                        const filename = videoRecording.current_file.split('/').pop();
                         document.getElementById('video-current-file').textContent = filename;
                     }
 
-                    recordingInfo.classList.remove('hidden');
-                    startBtn.classList.add('hidden');
-                    stopBtn.classList.remove('hidden');
+                    videoRecordingInfo.classList.remove('hidden');
                 } else {
-                    statusLight.className = 'w-4 h-4 rounded-full bg-gray-400';
-                    statusText.textContent = 'Idle';
-                    statusText.className = 'text-lg font-medium text-gray-600';
-
-                    recordingInfo.classList.add('hidden');
-                    startBtn.classList.remove('hidden');
-                    stopBtn.classList.add('hidden');
+                    videoStatusLight.className = 'w-4 h-4 rounded-full bg-gray-400';
+                    videoStatusText.textContent = 'Idle';
+                    videoStatusText.className = 'text-lg font-medium text-gray-600';
+                    videoRecordingInfo.classList.add('hidden');
                 }
+
+                // Toggle start/stop buttons based on any recording active
+                const anyRecording = audioStatus.is_recording || videoRecording.is_recording;
+                document.getElementById('start-buttons').classList.toggle('hidden', anyRecording);
+                document.getElementById('stop-buttons').classList.toggle('hidden', !anyRecording);
 
                 // Update transcode status
                 const transcodeIdle = document.getElementById('transcode-idle');
@@ -454,66 +508,107 @@
                 updateStorageInfo();
 
             } catch (error) {
-                console.error('Error updating video status:', error);
+                console.error('Error updating status:', error);
             }
         }
 
-        // Update storage info
+        // Update storage info for both audio and video
         async function updateStorageInfo() {
             try {
-                const response = await fetch('/api/video/storage');
-                const info = await response.json();
-
-                const statusSpan = document.getElementById('storage-status');
-
-                if (info.mounted) {
-                    statusSpan.innerHTML = `${info.free_gb} GB free (~${info.hours_remaining} hrs recording)`;
-                    statusSpan.className = info.hours_remaining < 2 ? 'text-red-600' : 'text-green-600';
+                // Audio storage
+                const audioResponse = await fetch('/api/system/disk');
+                const audioData = await audioResponse.json();
+                const audioStorageEl = document.getElementById('audio-storage-status');
+                if (audioData.error) {
+                    audioStorageEl.innerHTML = '<span class="text-red-600">Error</span>';
                 } else {
-                    statusSpan.innerHTML = `<span class="text-red-600">Not mounted: ${info.message}</span>`;
+                    const audioFreeGB = audioData.total_gb - audioData.used_gb;
+                    const audioHours = Math.floor(audioFreeGB / 0.69); // ~690 MB/hr for both channels
+                    audioStorageEl.innerHTML = `${audioFreeGB.toFixed(1)} GB free (~${audioHours} hrs)`;
+                    audioStorageEl.className = audioHours < 2 ? 'text-red-600' : 'text-green-600';
+                }
+
+                // Video storage
+                const videoResponse = await fetch('/api/video/storage');
+                const videoInfo = await videoResponse.json();
+                const videoStorageEl = document.getElementById('video-storage-status');
+
+                if (videoInfo.mounted) {
+                    videoStorageEl.innerHTML = `${videoInfo.free_gb} GB free (~${videoInfo.hours_remaining} hrs)`;
+                    videoStorageEl.className = videoInfo.hours_remaining < 2 ? 'text-red-600' : 'text-green-600';
+                } else {
+                    videoStorageEl.innerHTML = `<span class="text-red-600">Not mounted</span>`;
                 }
             } catch (error) {
-                document.getElementById('storage-status').innerHTML = '<span class="text-red-600">Error checking storage</span>';
+                console.error('Error updating storage info:', error);
             }
         }
 
-        // Start video recording
-        async function startVideoRecording() {
-            try {
-                const response = await fetch('/api/video/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
-                });
-
-                const result = await response.json();
-                if (result.error) {
-                    alert('Error: ' + result.error);
-                } else {
-                    updateVideoStatus();
-                }
-            } catch (error) {
-                alert('Error starting video: ' + error);
+        // Duration warning check
+        function checkDurationWarning() {
+            const duration = parseInt(document.getElementById('duration-input').value) || 0;
+            const warning = document.getElementById('duration-warning');
+            if (duration > 240) {
+                warning.classList.remove('hidden');
+            } else {
+                warning.classList.add('hidden');
             }
         }
 
-        // Stop video recording
-        async function stopVideoRecording() {
-            if (!confirm('Stop video recording?')) return;
+        // Start recording (type: 'audio', 'video', or 'both')
+        async function startRecording(type) {
+            const duration = parseInt(document.getElementById('duration-input').value) * 60;
+            const allowOverride = duration > 14400;
 
             try {
-                const response = await fetch('/api/video/stop', {
+                if (type === 'audio' || type === 'both') {
+                    const captureVideo = type === 'both';
+                    const response = await fetch('/api/record/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ duration, allow_override: allowOverride, capture_video: captureVideo })
+                    });
+                    const result = await response.json();
+                    if (result.error) {
+                        alert('Error starting audio: ' + result.error);
+                        return;
+                    }
+                }
+
+                if (type === 'video') {
+                    const response = await fetch('/api/video/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ duration })
+                    });
+                    const result = await response.json();
+                    if (result.error) {
+                        alert('Error starting video: ' + result.error);
+                        return;
+                    }
+                }
+
+                updateAllStatus();
+            } catch (error) {
+                alert('Error starting recording: ' + error);
+            }
+        }
+
+        // Stop all recording
+        async function stopRecording() {
+            if (!confirm('Stop all recording?')) return;
+
+            try {
+                const response = await fetch('/api/record/stop', {
                     method: 'POST'
                 });
-
                 const result = await response.json();
                 if (result.error) {
                     alert('Error: ' + result.error);
-                } else {
-                    updateVideoStatus();
                 }
+                updateAllStatus();
             } catch (error) {
-                alert('Error stopping video: ' + error);
+                alert('Error stopping recording: ' + error);
             }
         }
 
@@ -532,43 +627,6 @@
                 updateVideoStatus();
             } catch (error) {
                 alert('Error: ' + error);
-            }
-        }
-
-        // Load video files list
-        async function loadVideoFiles() {
-            try {
-                const response = await fetch('/api/video/files');
-                const files = await response.json();
-
-                // Render raw files
-                const rawList = document.getElementById('raw-files-list');
-                if (files.raw && files.raw.length > 0) {
-                    rawList.innerHTML = files.raw.map(f => `
-                        <div class="p-2 border-b last:border-b-0 text-sm">
-                            <div class="font-medium">${f.name}</div>
-                            <div class="text-gray-500">${f.size_mb} MB</div>
-                        </div>
-                    `).join('');
-                } else {
-                    rawList.innerHTML = '<p class="p-3 text-gray-500 text-sm">No raw files</p>';
-                }
-
-                // Render processed files
-                const processedList = document.getElementById('processed-files-list');
-                if (files.processed && files.processed.length > 0) {
-                    processedList.innerHTML = files.processed.map(f => `
-                        <div class="p-2 border-b last:border-b-0 text-sm">
-                            <div class="font-medium">${f.name}</div>
-                            <div class="text-gray-500">${f.size_mb} MB</div>
-                        </div>
-                    `).join('');
-                } else {
-                    processedList.innerHTML = '<p class="p-3 text-gray-500 text-sm">No processed files</p>';
-                }
-
-            } catch (error) {
-                console.error('Error loading video files:', error);
             }
         }
 

@@ -54,11 +54,18 @@ http://YOUR_PI_IP:5000
 
 ### First Audio Recording
 
-1. Go to **Calendar** (/)
-2. Click on a day to create a schedule, or go to **Schedule**
+1. Go to **Schedule** (/) - the calendar view
+2. Click on a day to create a schedule
 3. Set duration (default: 1 hour)
-4. Click **Create Schedule** or start immediately
+4. Click **Create Recording**
 5. Audio files will be saved to `~/recordings/`
+
+### Immediate Recording
+
+1. Go to **New/In Progress** page
+2. Set duration (minutes)
+3. Click **Audio Only**, **Video Only**, or **Audio + Video**
+4. Audio files save to `~/recordings/`, video to USB storage
 
 ### First Video Recording (Optional)
 
@@ -67,9 +74,9 @@ http://YOUR_PI_IP:5000
    - Enter credentials (if required)
    - Set USB storage path
    - Click **Test Connection**
-2. Go to **Camera** page
+2. Go to **New/In Progress** page
 3. Select a PTZ preset (if desired)
-4. Click **Start Recording**
+4. Click **Video Only** or **Audio + Video**
 5. Video files will be saved to USB storage
 
 ### Verify Audio is Working

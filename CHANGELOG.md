@@ -1,6 +1,29 @@
 # Changelog
 
-All notable changes to the ILC Audio Recorder project are documented in this file.
+All notable changes to the Church Recording project are documented in this file.
+
+## [1.5.0] - 2026-01-24
+
+### Changed
+- **Rebranded** from "Audio Recorder" to "Church Recording"
+- **Schedule page (/)** - Calendar renamed to Schedule, now the only way to create scheduled recordings
+- **New/In Progress page (/camera)** - Camera page renamed, now includes unified recording controls
+- **Unified Recording Controls** - Start Audio Only, Video Only, or Both from one page
+- **Combined Status Panel** - View audio and video recording status together
+- **Mobile Page Indicator** - Shows current page name on mobile devices
+- **Simplified Navigation** - Removed standalone Schedule page, consolidated workflow
+
+### Removed
+- Standalone Schedule page (`/schedule`) - functionality moved to calendar modal
+- Quick Record from Settings page - moved to New/In Progress page
+- Recording Status from Settings page - moved to New/In Progress page
+
+### Technical
+- Deleted `schedule.html` template
+- Removed `/schedule` route from `app.py`
+- Updated navigation across all templates
+
+---
 
 ## [1.4.0] - 2026-01-24
 

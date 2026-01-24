@@ -77,18 +77,18 @@ If the installer encounters issues, use the helper scripts:
 - [ ] Status shows "Idle"
 
 ### Page Verification
-- [ ] Test Calendar (/) - loads without errors
-- [ ] Test Schedule (/schedule) - loads without errors
-- [ ] Test Camera (/camera) - loads without errors
+- [ ] Test Schedule (/) - calendar view loads without errors
+- [ ] Test New/In Progress (/camera) - loads without errors
 - [ ] Test Recordings (/recordings) - loads without errors
 - [ ] Test Settings (/settings) - loads without errors
 
 ### Functional Testing
 
-#### Manual Audio Recording Test
-- [ ] Go to Schedule page
-- [ ] Create a quick one-time recording (1 minute)
-- [ ] Verify status changes to recording state
+#### Immediate Recording Test
+- [ ] Go to New/In Progress page
+- [ ] Set duration to 1 minute
+- [ ] Click "Audio Only" button
+- [ ] Verify audio status changes to recording state
 - [ ] Wait for recording to complete (or click Stop)
 - [ ] Go to Recordings page
 - [ ] Verify `*_L.wav` and `*_R.wav` files exist
@@ -102,32 +102,26 @@ If the installer encounters issues, use the helper scripts:
 - [ ] Test filename configuration preview
 - [ ] Verify backup/restore buttons are present
 
-#### Calendar Click Test
-- [ ] Go to Calendar page
+#### Schedule Test
+- [ ] Go to Schedule page (calendar view)
 - [ ] Click on a future day
 - [ ] Verify schedule creation modal appears
 - [ ] Verify "Also capture video" checkbox is present
-- [ ] Close modal without saving
-
-#### Schedule Test
-- [ ] Go to Schedule page
 - [ ] Create a test schedule
-- [ ] Verify job appears in list
-- [ ] Go to Calendar page
-- [ ] Verify event shows up
-- [ ] Return to Schedule page
-- [ ] Delete test schedule
+- [ ] Verify event shows up on calendar
+- [ ] Click event and delete it
 
 #### Video Recording Test (if camera configured)
 - [ ] Go to Settings page
 - [ ] Configure camera IP and credentials
 - [ ] Click "Test Connection" - verify success
-- [ ] Go to Camera page
+- [ ] Go to New/In Progress page
 - [ ] Click a PTZ preset button - verify camera moves
-- [ ] Start a short video recording (1 minute)
-- [ ] Verify recording status shows active
+- [ ] Click "Video Only" button (1 minute)
+- [ ] Verify video recording status shows active
 - [ ] Stop recording
-- [ ] Verify raw file appears in file list
+- [ ] Go to Recordings page
+- [ ] Verify raw file appears in video list
 - [ ] Wait for transcoding to complete
 - [ ] Verify processed file appears
 
@@ -137,7 +131,7 @@ If the installer encounters issues, use the helper scripts:
 - [ ] Reconnect SSH
 - [ ] Check service auto-started: `sudo systemctl status audio-recorder`
 - [ ] Verify web UI accessible
-- [ ] Check schedules persisted (go to Schedule page)
+- [ ] Check schedules persisted (go to Schedule page - calendar view)
 
 ## Production Readiness
 
