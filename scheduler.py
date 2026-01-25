@@ -5,6 +5,10 @@ Manages scheduled recordings using SQLite and APScheduler
 """
 
 import sqlite3
+import sys
+import os
+import logging
+import traceback
 from pathlib import Path
 from datetime import datetime, timedelta
 import json
@@ -13,6 +17,60 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.cron import CronTrigger
 import recorder
 import atexit
+
+# Log file path
+LOG_DIR = Path.home() / '.audio-recorder'
+LOG_DIR.mkdir(exist_ok=True)
+SCHEDULER_LOG_PATH = LOG_DIR / 'scheduler.log'
+
+# Configure logging for scheduler troubleshooting
+# Use local time for timestamps (not UTC)
+import time as time_module
+
+class LocalTimeFormatter(logging.Formatter):
+    converter = time_module.localtime  # Use local time instead of UTC
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.StreamHandler(sys.stderr),
+        logging.FileHandler(SCHEDULER_LOG_PATH)
+    ]
+)
+# Apply local time formatter to all handlers
+for handler in logging.root.handlers:
+    handler.setFormatter(LocalTimeFormatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+                                            datefmt='%Y-%m-%d %H:%M:%S'))
+logger = logging.getLogger('scheduler')
+
+
+def _log_scheduler_environment():
+    """Log environment variables and system state for scheduler thread troubleshooting"""
+    import threading
+
+    logger.info("-" * 40)
+    logger.info("SCHEDULER THREAD ENVIRONMENT")
+    logger.info("-" * 40)
+    logger.info(f"Thread: {threading.current_thread().name}")
+    logger.info(f"Thread ID: {threading.current_thread().ident}")
+    logger.info(f"Is daemon: {threading.current_thread().daemon}")
+    logger.info(f"Process ID: {os.getpid()}")
+    logger.info(f"Working directory: {os.getcwd()}")
+
+    # Log key environment variables
+    env_vars = ['PATH', 'HOME', 'USER', 'DISPLAY', 'XDG_RUNTIME_DIR',
+                'PULSE_SERVER', 'ALSA_CARD', 'LANG', 'LC_ALL']
+    logger.info("Environment variables:")
+    for var in env_vars:
+        value = os.environ.get(var, '(not set)')
+        # Truncate PATH if too long
+        if var == 'PATH' and len(value) > 100:
+            value = value[:100] + '...'
+        logger.info(f"  {var}={value}")
+
+    logger.info("-" * 40)
 
 # Database setup
 DB_PATH = Path.home() / '.audio-recorder' / 'schedule.db'
@@ -351,23 +409,34 @@ def _execute_scheduled_recording(job_id, duration, allow_override=False, capture
         allow_override: Allow duration longer than default limit
         capture_video: Also capture video from PTZ camera
     """
-    print(f"Executing scheduled job: {job_id}")
+    import threading
+    logger.info(f"=" * 60)
+    logger.info(f"SCHEDULED RECORDING START: {job_id}")
+    logger.info(f"Thread: {threading.current_thread().name}")
+    logger.info(f"Duration: {duration}s, allow_override: {allow_override}, capture_video: {capture_video}")
+    logger.info(f"=" * 60)
+
+    # Log scheduler thread environment for troubleshooting
+    _log_scheduler_environment()
 
     video_error = None
 
     try:
         # Start audio recording with override flag
+        logger.info(f"Job {job_id}: Calling recorder.start_capture()...")
         recorder.start_capture(duration, allow_override=allow_override)
+        logger.info(f"Job {job_id}: recorder.start_capture() returned successfully")
 
         # Start video recording if requested
         if capture_video:
             try:
                 import video_recorder
                 video_recorder.start_video_recording(duration)
-                print(f"Job {job_id}: Video recording started")
+                logger.info(f"Job {job_id}: Video recording started")
             except Exception as ve:
                 video_error = str(ve)
-                print(f"Job {job_id}: Video recording failed: {ve}")
+                logger.error(f"Job {job_id}: Video recording failed: {ve}")
+                logger.error(traceback.format_exc())
                 # Audio continues even if video fails
 
         # Update database status
@@ -386,10 +455,11 @@ def _execute_scheduled_recording(job_id, duration, allow_override=False, capture
         conn.commit()
         conn.close()
 
-        print(f"Job {job_id} completed successfully")
+        logger.info(f"Job {job_id} completed successfully")
 
     except Exception as e:
-        print(f"Job {job_id} failed: {e}")
+        logger.error(f"Job {job_id} FAILED: {e}")
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
 
         # Update database with error status
         conn = sqlite3.connect(DB_PATH)

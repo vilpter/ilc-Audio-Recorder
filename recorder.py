@@ -8,11 +8,118 @@ import subprocess
 import signal
 import shutil
 import sqlite3
+import sys
+import os
+import logging
 from pathlib import Path
 from datetime import datetime
 import threading
 import time
 import scheduler
+
+# Log file paths (exported for Settings page)
+LOG_DIR = Path.home() / '.audio-recorder'
+LOG_DIR.mkdir(exist_ok=True)
+RECORDER_LOG_PATH = LOG_DIR / 'recorder.log'
+FFMPEG_LOG_PATH = LOG_DIR / 'ffmpeg.log'
+
+# Configure logging for device detection troubleshooting
+# Use local time for timestamps (not UTC)
+class LocalTimeFormatter(logging.Formatter):
+    converter = time.localtime  # Use local time instead of UTC
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.StreamHandler(sys.stderr),
+        logging.FileHandler(RECORDER_LOG_PATH)
+    ]
+)
+# Apply local time formatter to all handlers
+for handler in logging.root.handlers:
+    handler.setFormatter(LocalTimeFormatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+                                            datefmt='%Y-%m-%d %H:%M:%S'))
+logger = logging.getLogger('recorder')
+
+
+def get_log_paths():
+    """Return dict of log file paths for Settings page"""
+    return {
+        'recorder': str(RECORDER_LOG_PATH),
+        'ffmpeg': str(FFMPEG_LOG_PATH),
+        'scheduler': str(LOG_DIR / 'scheduler.log')
+    }
+
+
+def _log_system_state():
+    """Log system state for troubleshooting - called at recording start"""
+    logger.info("=" * 40)
+    logger.info("SYSTEM STATE SNAPSHOT")
+    logger.info("=" * 40)
+    logger.info(f"Timestamp: {datetime.now().isoformat()}")
+    logger.info(f"Thread: {threading.current_thread().name}")
+
+    # Log environment variables relevant to audio
+    env_vars = ['PATH', 'HOME', 'USER', 'DISPLAY', 'XDG_RUNTIME_DIR', 'PULSE_SERVER', 'ALSA_CARD']
+    logger.info("Environment variables:")
+    for var in env_vars:
+        value = os.environ.get(var, '(not set)')
+        logger.info(f"  {var}={value}")
+
+    # Log ALSA mixer state
+    try:
+        result = subprocess.run(['amixer', '-c', '1'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            logger.info("ALSA mixer state (card 1):")
+            for line in result.stdout.split('\n')[:20]:  # First 20 lines
+                if line.strip():
+                    logger.info(f"  {line}")
+        else:
+            logger.warning(f"amixer failed: {result.stderr}")
+    except Exception as e:
+        logger.warning(f"Could not get ALSA mixer state: {e}")
+
+    # Log running audio processes
+    try:
+        result = subprocess.run(['pgrep', '-a', 'ffmpeg|arecord|pulseaudio|pipewire'],
+                              capture_output=True, text=True, shell=False, timeout=5)
+        # pgrep returns non-zero if no matches, that's OK
+        if result.stdout.strip():
+            logger.info("Running audio-related processes:")
+            for line in result.stdout.strip().split('\n'):
+                logger.info(f"  {line}")
+        else:
+            logger.info("No other audio processes running")
+    except Exception as e:
+        logger.debug(f"Could not check running processes: {e}")
+
+    logger.info("=" * 40)
+
+
+def _log_ffmpeg_output(process, paths, job_timestamp):
+    """Log FFmpeg stderr to dedicated log file"""
+    ffmpeg_log_file = FFMPEG_LOG_PATH
+
+    try:
+        with open(ffmpeg_log_file, 'a') as f:
+            f.write(f"\n{'='*60}\n")
+            f.write(f"Recording: {job_timestamp}\n")
+            f.write(f"Started: {datetime.now().isoformat()}\n")
+            f.write(f"Output files: {paths['source_a']}, {paths['source_b']}\n")
+            f.write(f"{'='*60}\n")
+
+            # Read stderr in real-time
+            for line in process.stderr:
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                f.write(f"[{timestamp}] {line}")
+                f.flush()
+
+            f.write(f"\nProcess ended: {datetime.now().isoformat()}\n")
+            f.write(f"Return code: {process.returncode}\n")
+    except Exception as e:
+        logger.error(f"Error writing FFmpeg log: {e}")
 
 # Configuration constants
 DEFAULT_MAX_DURATION = 14400  # 4 hours in seconds
@@ -169,10 +276,15 @@ def start_capture(duration_seconds=3600, device=None, allow_override=False):
         # Import here to avoid circular dependency
         import scheduler
         device_config = scheduler.get_system_config('audio_device', 'auto')
+        logger.info(f"Device config from database: '{device_config}'")
         if device_config == 'auto':
+            logger.info("Auto-detecting audio device...")
             device = auto_detect_audio_device()
         else:
             device = device_config
+            logger.info(f"Using configured device: {device}")
+
+    logger.info(f"FINAL DEVICE FOR RECORDING: {device}")
     
     with process_lock:
         if current_process and current_process.poll() is None:
@@ -190,8 +302,12 @@ def start_capture(duration_seconds=3600, device=None, allow_override=False):
         if not sufficient:
             raise RuntimeError(msg)
         
+        logger.info(f"Starting recording: {duration_seconds}s on {device}, ~{req_gb/2:.2f} GB estimated per channel")
         print(f"Starting recording: {duration_seconds}s on {device}, ~{req_gb/2:.2f} GB estimated per channel")
-        
+
+        # Log system state for troubleshooting
+        _log_system_state()
+
         # FFmpeg command for dual-mono capture
         cmd = [
             'ffmpeg',
@@ -208,13 +324,18 @@ def start_capture(duration_seconds=3600, device=None, allow_override=False):
             '-ar', str(SAMPLE_RATE),
             str(paths['source_b'])
         ]
-        
+
+        # Log the exact FFmpeg command for reproduction/debugging
+        cmd_str = ' '.join(str(c) for c in cmd)
+        logger.info(f"FFmpeg command: {cmd_str}")
+
         # Start FFmpeg process
         current_process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)
+            preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_IGN),
+            text=True  # Enable text mode for easier log reading
         )
         
         # Start monitoring thread
@@ -268,15 +389,61 @@ def _monitor_process(process, paths, duration):
     """
     Monitor FFmpeg process and handle post-processing
     """
-    # Wait for process to complete
-    process.wait()
-    
+    job_timestamp = paths['timestamp']
+    logger.info(f"Monitor thread started for recording: {job_timestamp}")
+
+    # Start FFmpeg stderr logging in separate thread
+    ffmpeg_log_thread = threading.Thread(
+        target=_log_ffmpeg_output,
+        args=(process, paths, job_timestamp),
+        daemon=True
+    )
+    ffmpeg_log_thread.start()
+
+    # Heartbeat logging - log every 60 seconds while recording
+    heartbeat_interval = 60
+    start_time = time.time()
+    heartbeat_count = 0
+
+    while process.poll() is None:
+        time.sleep(5)  # Check every 5 seconds
+        elapsed = time.time() - start_time
+
+        # Log heartbeat every 60 seconds
+        if elapsed >= (heartbeat_count + 1) * heartbeat_interval:
+            heartbeat_count += 1
+            minutes_elapsed = int(elapsed / 60)
+            minutes_remaining = int((duration - elapsed) / 60)
+            logger.info(f"HEARTBEAT [{job_timestamp}]: Recording in progress - "
+                       f"{minutes_elapsed} min elapsed, ~{minutes_remaining} min remaining")
+
+    # Process completed
+    elapsed_total = time.time() - start_time
+    logger.info(f"FFmpeg process ended for {job_timestamp} after {elapsed_total:.1f}s (expected {duration}s)")
+    logger.info(f"FFmpeg return code: {process.returncode}")
+
     # Check if files were created successfully
     if paths['source_a'].exists() and paths['source_b'].exists():
+        size_a = paths['source_a'].stat().st_size
+        size_b = paths['source_b'].stat().st_size
+        size_a_mb = size_a / (1024 * 1024)
+        size_b_mb = size_b / (1024 * 1024)
+
+        logger.info(f"Recording completed: {job_timestamp}")
+        logger.info(f"  Left channel: {paths['source_a']} ({size_a_mb:.1f} MB)")
+        logger.info(f"  Right channel: {paths['source_b']} ({size_b_mb:.1f} MB)")
+
+        # Warn if files are suspiciously small (might be silent)
+        expected_size_mb = (duration * SAMPLE_RATE * BYTES_PER_SAMPLE) / (1024 * 1024)
+        if size_a_mb < expected_size_mb * 0.5 or size_b_mb < expected_size_mb * 0.5:
+            logger.warning(f"WARNING: File sizes are smaller than expected ({expected_size_mb:.1f} MB). "
+                          f"Recording may be truncated or silent!")
+
         print(f"Recording completed: {paths['timestamp']}")
-        # TODO: Trigger post-processing (MP3/FLAC conversion)
-        # This will be implemented in the file management module
     else:
+        logger.error(f"Recording FAILED: {job_timestamp} - output files not created")
+        logger.error(f"  Expected: {paths['source_a']}")
+        logger.error(f"  Expected: {paths['source_b']}")
         print(f"Recording failed: {paths['timestamp']}")
 
 
@@ -309,14 +476,21 @@ def get_available_devices():
 def get_available_audio_devices():
     """
     Parse arecord -l output to list all capture-capable devices
-    
+
     Returns list of dictionaries with device info
     """
     import re
-    
+
+    logger.debug(f"get_available_audio_devices() called from thread: {threading.current_thread().name}")
+
     try:
         result = subprocess.run(['arecord', '-l'], capture_output=True, text=True)
+        logger.debug(f"arecord -l return code: {result.returncode}")
+        logger.debug(f"arecord -l stdout: {result.stdout[:500] if result.stdout else '(empty)'}")
+        if result.stderr:
+            logger.debug(f"arecord -l stderr: {result.stderr[:500]}")
     except Exception as e:
+        logger.error(f"arecord -l failed with exception: {e}")
         return []
     
     devices = []
@@ -350,24 +524,29 @@ def get_available_audio_devices():
 def auto_detect_audio_device():
     """
     Automatically select the best audio device
-    
+
     Priority:
     1. First USB audio device (UCA202)
-    2. First capture-capable device  
+    2. First capture-capable device
     3. hw:1,0 as fallback
     """
+    logger.info(f"auto_detect_audio_device() called from thread: {threading.current_thread().name}")
     devices = get_available_audio_devices()
-    
+    logger.info(f"Found {len(devices)} audio device(s): {[d['alsa_id'] for d in devices]}")
+
     # Try to find recommended device (UCA202)
     for dev in devices:
         if dev.get('is_recommended'):
+            logger.info(f"Selected recommended device: {dev['alsa_id']} ({dev['name']})")
             return dev['alsa_id']
-    
+
     # Fallback to first capture device
     if devices:
+        logger.warning(f"No recommended device found, using first device: {devices[0]['alsa_id']}")
         return devices[0]['alsa_id']
-    
+
     # Ultimate fallback
+    logger.error("NO AUDIO DEVICES DETECTED! Falling back to hw:1,0 - THIS MAY CAUSE SILENT RECORDINGS")
     return 'hw:1,0'
 
 

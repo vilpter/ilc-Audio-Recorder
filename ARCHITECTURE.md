@@ -160,7 +160,8 @@ CREATE TABLE users (
 ### System API
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/logs` | Get application logs |
+| GET | `/api/logs` | Get application logs (supports type param: app, recorder, scheduler, ffmpeg, error) |
+| GET | `/api/logs/paths` | Get all log file paths |
 | GET | `/api/system/disk` | Get disk space info |
 
 ### Backup/Restore API
@@ -233,6 +234,8 @@ church-recording/
 ├── install.sh                # Automated installer
 ├── fix_service.sh            # Service repair script
 ├── configure_audio.sh        # Audio device setup script
+├── troubleshoot_audio.sh     # Scheduled recording diagnostics
+├── audio_analyzer.py         # Audio analysis utilities (future)
 ├── templates/
 │   ├── index.html            # Dashboard
 │   ├── login.html            # Login page
@@ -258,7 +261,11 @@ church-recording/
 | Video recordings | `/mnt/usb_recorder/` | Configurable in Settings |
 | Schedule database | `~/.audio-recorder/schedule.db` | SQLite |
 | Auth database | `~/.audio-recorder/auth.db` | SQLite |
-| Application logs | `/var/log/audio-recorder/` | Rotated logs |
+| Application logs | `/var/log/audio-recorder/app.log` | General application log |
+| Error logs | `/var/log/audio-recorder/error.log` | Error-level messages |
+| Recorder logs | `~/.audio-recorder/recorder.log` | Audio capture operations |
+| Scheduler logs | `~/.audio-recorder/scheduler.log` | Scheduled job execution |
+| FFmpeg logs | `~/.audio-recorder/ffmpeg.log` | FFmpeg stderr output |
 | Service file | `/etc/systemd/system/audio-recorder.service` | Installed by install.sh |
 
 ---
@@ -285,4 +292,4 @@ If import causes issues, use Settings → Revert to restore from automatic backu
 
 ---
 
-*Last updated: 2026-01-24*
+*Last updated: 2026-01-25*

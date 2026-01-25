@@ -49,6 +49,14 @@ A professional-grade dual-channel audio and video recording system with web-base
 - Schedule persistence across reboots
 - Export/import configuration and schedules
 
+### Diagnostic Logging
+- Dedicated log files for recorder, scheduler, and FFmpeg
+- Log viewer in Settings with selectable log type and file path display
+- System state logging at recording start (environment, ALSA state)
+- 60-second heartbeat during recordings
+- FFmpeg stderr capture for debugging
+- Troubleshooting script for diagnosing scheduled recording issues
+
 ## Hardware Requirements
 
 ### Required (Audio)
@@ -197,6 +205,8 @@ audio-recorder/
 ├── install.sh                # Automated installer
 ├── configure_audio.sh        # Audio configuration helper
 ├── fix_service.sh            # Service troubleshooting script
+├── troubleshoot_audio.sh     # Diagnostic script for scheduled recordings
+├── audio_analyzer.py         # Audio analysis utilities (future feature)
 ├── configs/
 │   ├── asound.conf           # ALSA configuration
 │   └── 85-usb-audio.rules    # udev rules for USB audio
@@ -456,17 +466,30 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 ## Roadmap
 
 ### Planned Features
+- Make top ribbon sticky when scrolling.  Evaluate whether webpage structural changes would be best practice to implement this, but recommend what to do before implementing.
+- Update desktop to use hamburger menu the same as the mobile display
 - Add support for multiple user accounts
 - In Controls, add an indication of any other users who are currently logged in.
 - Audio post-processing (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate
 - Note the last date of download for files
+- Audio file analysis (silence detection, dB level analysis) using `audio_analyzer.py`
 
-### Recently Completed (v1.5.1)
+### Recently Completed (v1.5.3)
+- Enhanced diagnostic logging with dedicated log files (recorder, scheduler, FFmpeg)
+- Log viewer shows file path and supports all log types
+- System state logging at recording start (environment variables, ALSA mixer state)
+- 60-second heartbeat logging during recordings
+- FFmpeg stderr capture for debugging silent recording issues
+- New troubleshooting script (`troubleshoot_audio.sh`) for diagnosing scheduled recordings
+- Local timezone timestamps in all logs
+
+### Previously Completed (v1.5.1/v1.5.2)
 - Renamed "New/In Progress" to "Control" in navigation
 - Added A/A&V indicators to calendar for audio vs audio+video recordings
 - Renamed "Recording Filename Configuration" to "Audio Filename Nomenclature"
 - Simplified "Also capture video" label in Edit Recording popup
 - Consolidated documentation (new ARCHITECTURE.md, removed obsolete docs/)
+- Consolidated storage location for audio and video recordings
 
 ### Previously Completed (v1.5.0)
 - Unified recording controls (Audio/Video/Both)
@@ -495,5 +518,5 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
 ---
 
-**Version:** 1.5.0
-**Last Updated:** 2026-01-24
+**Version:** 1.5.3
+**Last Updated:** 2026-01-25

@@ -705,32 +705,68 @@ def test_audio_device():
 
 
 # Log Viewer API
+def _get_log_file_path(log_type):
+    """Get the file path for a given log type"""
+    home_log_dir = Path.home() / '.audio-recorder'
+    var_log_dir = Path('/var/log/audio-recorder')
+
+    log_paths = {
+        'app': var_log_dir / 'app.log',
+        'error': var_log_dir / 'error.log',
+        'recorder': home_log_dir / 'recorder.log',
+        'scheduler': home_log_dir / 'scheduler.log',
+        'ffmpeg': home_log_dir / 'ffmpeg.log'
+    }
+    return log_paths.get(log_type, var_log_dir / f'{log_type}.log')
+
+
+@app.route('/api/logs/paths', methods=['GET'])
+@login_required
+def get_log_paths():
+    """Get all log file paths for display in Settings"""
+    home_log_dir = Path.home() / '.audio-recorder'
+    var_log_dir = Path('/var/log/audio-recorder')
+
+    return jsonify({
+        'app': str(var_log_dir / 'app.log'),
+        'error': str(var_log_dir / 'error.log'),
+        'recorder': str(home_log_dir / 'recorder.log'),
+        'scheduler': str(home_log_dir / 'scheduler.log'),
+        'ffmpeg': str(home_log_dir / 'ffmpeg.log')
+    })
+
+
 @app.route('/api/logs', methods=['GET'])
 @login_required
 def get_logs():
     """Get application logs"""
-    log_type = request.args.get('type', 'app')  # 'app' or 'error'
+    log_type = request.args.get('type', 'app')
     lines = int(request.args.get('lines', 100))
-    
-    log_file = Path('/var/log/audio-recorder') / f'{log_type}.log'
-    
+
+    log_file = _get_log_file_path(log_type)
+
     if not log_file.exists():
-        return jsonify({'logs': [], 'message': 'Log file not found'})
-    
+        return jsonify({
+            'logs': [],
+            'message': 'Log file not found',
+            'file_path': str(log_file)
+        })
+
     try:
         # Read last N lines
         with open(log_file, 'r') as f:
             all_lines = f.readlines()
             log_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
-        
+
         return jsonify({
             'logs': log_lines,
             'total_lines': len(all_lines),
             'showing_lines': len(log_lines),
-            'log_type': log_type
+            'log_type': log_type,
+            'file_path': str(log_file)
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e), 'file_path': str(log_file)}), 500
 
 
 # Backup/Restore API Endpoints (Refactored)

@@ -360,11 +360,14 @@
 
         <!-- Log Viewer -->
         <div class="bg-white rounded-lg shadow-md p-6">
-            <div class="flex justify-between items-center mb-4">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3">
                 <h2 class="text-xl font-semibold">System Logs</h2>
-                <div class="flex space-x-2">
-                    <select id="log-type" onchange="loadLogs()" class="border rounded px-3 py-2">
+                <div class="flex flex-wrap gap-2">
+                    <select id="log-type" onchange="loadLogs(); updateLogPath()" class="border rounded px-3 py-2">
                         <option value="app">Application Log</option>
+                        <option value="recorder">Recorder Log</option>
+                        <option value="scheduler">Scheduler Log</option>
+                        <option value="ffmpeg">FFmpeg Log</option>
                         <option value="error">Error Log</option>
                     </select>
                     <select id="log-lines" onchange="loadLogs()" class="border rounded px-3 py-2">
@@ -378,14 +381,20 @@
                     </button>
                 </div>
             </div>
-            
-            <div id="log-container" class="bg-gray-900 text-green-400 font-mono text-xs p-4 rounded overflow-auto" 
+
+            <!-- Log file path display -->
+            <div id="log-path-display" class="mb-3 p-2 bg-gray-100 rounded text-xs font-mono text-gray-600">
+                <span class="font-semibold">File:</span> <span id="current-log-path">Loading...</span>
+            </div>
+
+            <div id="log-container" class="bg-gray-900 text-green-400 font-mono text-xs p-4 rounded overflow-auto"
                  style="max-height: 500px;">
                 <div class="text-gray-500">Loading logs...</div>
             </div>
-            
-            <div class="mt-2 text-sm text-gray-600">
+
+            <div class="mt-2 text-sm text-gray-600 flex flex-col sm:flex-row sm:justify-between gap-1">
                 <span id="log-info">Showing last 100 lines</span>
+                <span class="text-gray-400 text-xs">Timestamps are in local time</span>
             </div>
         </div>
     </div>
@@ -469,6 +478,7 @@
         window.addEventListener('DOMContentLoaded', () => {
             loadCurrentConfig();
             loadDevices();
+            loadLogPaths();
             loadLogs();
             loadCameraConfig();
         });
@@ -636,33 +646,62 @@
             loadCurrentConfig();
         }
 
+        // Log file paths cache
+        let logPaths = {};
+
+        async function loadLogPaths() {
+            try {
+                const response = await fetch('/api/logs/paths');
+                logPaths = await response.json();
+                updateLogPath();
+            } catch (error) {
+                console.error('Error loading log paths:', error);
+            }
+        }
+
+        function updateLogPath() {
+            const logType = document.getElementById('log-type').value;
+            const pathSpan = document.getElementById('current-log-path');
+
+            if (logPaths[logType]) {
+                pathSpan.textContent = logPaths[logType];
+            } else {
+                pathSpan.textContent = '(path not available)';
+            }
+        }
+
         async function loadLogs() {
             const logType = document.getElementById('log-type').value;
             const lines = document.getElementById('log-lines').value;
-            
+
             try {
                 const response = await fetch(`/api/logs?type=${logType}&lines=${lines}`);
                 const data = await response.json();
-                
+
                 const container = document.getElementById('log-container');
-                
+
                 if (data.logs && data.logs.length > 0) {
-                    container.innerHTML = data.logs.map(line => 
+                    container.innerHTML = data.logs.map(line =>
                         `<div>${escapeHtml(line)}</div>`
                     ).join('');
-                    
+
                     // Scroll to bottom
                     container.scrollTop = container.scrollHeight;
-                    
-                    document.getElementById('log-info').textContent = 
+
+                    document.getElementById('log-info').textContent =
                         `Showing ${data.showing_lines} of ${data.total_lines} total lines`;
                 } else {
                     container.innerHTML = '<div class="text-gray-500">No logs available</div>';
                     document.getElementById('log-info').textContent = 'No logs found';
                 }
+
+                // Update the file path display
+                if (data.file_path) {
+                    document.getElementById('current-log-path').textContent = data.file_path;
+                }
             } catch (error) {
                 console.error('Error loading logs:', error);
-                document.getElementById('log-container').innerHTML = 
+                document.getElementById('log-container').innerHTML =
                     '<div class="text-red-500">Error loading logs</div>';
             }
         }

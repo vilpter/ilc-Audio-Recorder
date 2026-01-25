@@ -2,6 +2,50 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.5.3] - 2026-01-25
+
+### Added
+- **Enhanced Diagnostic Logging** - Comprehensive logging for troubleshooting scheduled recordings
+  - Dedicated `recorder.log` for audio capture operations
+  - Dedicated `scheduler.log` for job scheduling events
+  - Dedicated `ffmpeg.log` for FFmpeg stderr output
+  - System state logging at recording start (environment variables, ALSA mixer state)
+  - 60-second heartbeat logging during active recordings
+  - File size verification on recording completion
+- **Log Viewer Improvements** (Settings page)
+  - New log types: Recorder, Scheduler, FFmpeg
+  - Displays log file path for each log type
+  - New `/api/logs/paths` endpoint for log file locations
+- **Troubleshooting Script** (`troubleshoot_audio.sh`)
+  - Diagnoses scheduled recording issues on Raspberry Pi
+  - Tests device detection in main thread vs background thread
+  - Validates FFmpeg and arecord capture
+  - Checks audio device configuration
+- **Audio Analyzer** (`audio_analyzer.py`)
+  - Utility module for audio file analysis (future feature)
+  - Silence detection using FFmpeg silencedetect filter
+  - Average dB level analysis
+  - Functions: `analyze_file()`, `analyze_multiple_files()`, `detect_silence()`
+
+### Changed
+- All log timestamps now use local timezone (previously UTC)
+- Log viewer dropdown includes all available log types
+
+### Technical
+- New `LocalTimeFormatter` class for timezone-aware logging
+- Added `_log_system_state()` function in recorder.py
+- Added `_log_scheduler_environment()` function in scheduler.py
+- Added `_log_ffmpeg_output()` function for FFmpeg stderr capture
+
+---
+
+## [1.5.2] - 2026-01-25
+
+### Changed
+- **Storage Consolidation** - Unified storage location for audio and video recordings
+
+---
+
 ## [1.5.1] - 2026-01-24
 
 ### Changed
