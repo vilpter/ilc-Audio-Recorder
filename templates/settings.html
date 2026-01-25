@@ -140,23 +140,56 @@
             </div>
         </div>
 
-        <!-- Audio Filename Nomenclature -->
+        <!-- File Naming and Location -->
         <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 class="text-xl font-semibold mb-4">Audio Filename Nomenclature</h2>
-            
+            <h2 class="text-xl font-semibold mb-4">File Naming and Location</h2>
+
+            <!-- Storage Path Configuration -->
+            <div class="mb-6">
+                <h3 class="font-semibold text-gray-700 mb-3">Storage Location</h3>
+                <p class="text-sm text-gray-600 mb-3">
+                    Configure the base path where all recordings (audio and video) will be stored.
+                    Audio files are saved directly in this path. Video files are saved in <code class="bg-gray-100 px-1">raw/</code> and <code class="bg-gray-100 px-1">processed/</code> subdirectories.
+                </p>
+
+                <div class="mb-4">
+                    <label class="block text-gray-700 mb-2">Storage Path</label>
+                    <input type="text" id="storage-path" placeholder="/mnt/usb_recorder"
+                        class="w-full md:w-2/3 border border-gray-300 rounded px-3 py-2">
+                    <p class="text-xs text-gray-500 mt-1">Default: /mnt/usb_recorder</p>
+                </div>
+
+                <!-- Storage Status -->
+                <div id="storage-status" class="p-4 bg-gray-50 border rounded mb-4">
+                    <h4 class="font-semibold text-gray-700 mb-2">Storage Status</h4>
+                    <p class="text-sm">
+                        <span id="storage-status-text" class="text-gray-500">Checking...</span>
+                    </p>
+                </div>
+
+                <button onclick="saveStorageConfig()"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded">
+                    Save Storage Location
+                </button>
+            </div>
+
+            <hr class="my-6 border-gray-200">
+
+            <!-- Audio Filename Suffixes -->
+            <h3 class="font-semibold text-gray-700 mb-3">Audio Filename Suffixes</h3>
             <p class="text-sm text-gray-600 mb-4">
                 Recording files use the format: <code class="bg-gray-100 px-2 py-1 rounded">YYYY_MMM_DD_HH:MM_[SUFFIX].wav</code>
             </p>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block text-gray-700 mb-2">Left Channel Suffix</label>
                     <input type="text" id="left-suffix" value="L" maxlength="10"
-                        class="w-full border border-gray-300 rounded px-3 py-2" 
+                        class="w-full border border-gray-300 rounded px-3 py-2"
                         placeholder="e.g., L, Left, Ch1">
                     <p class="text-xs text-gray-500 mt-1">Default: L</p>
                 </div>
-                
+
                 <div>
                     <label class="block text-gray-700 mb-2">Right Channel Suffix</label>
                     <input type="text" id="right-suffix" value="R" maxlength="10"
@@ -165,7 +198,7 @@
                     <p class="text-xs text-gray-500 mt-1">Default: R</p>
                 </div>
             </div>
-            
+
             <!-- Preview -->
             <div class="p-4 bg-blue-50 border border-blue-200 rounded mb-4">
                 <h3 class="font-semibold text-blue-900 mb-2">Filename Preview</h3>
@@ -174,7 +207,7 @@
                     <span id="filename-preview-right">2026_Jan_17_14:30_R.wav</span>
                 </p>
             </div>
-            
+
             <button onclick="saveFilenameConfig()"
                 class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded">
                 Save Filename Configuration
@@ -185,19 +218,12 @@
         <div id="camera-settings" class="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 class="text-xl font-semibold mb-4">Camera Configuration (PTZOptics)</h2>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div>
                     <label class="block text-gray-700 mb-2">Camera IP Address</label>
                     <input type="text" id="camera-ip" placeholder="192.168.1.100"
                         class="w-full border border-gray-300 rounded px-3 py-2">
                     <p class="text-xs text-gray-500 mt-1">IP address of your PTZOptics camera</p>
-                </div>
-
-                <div>
-                    <label class="block text-gray-700 mb-2">USB Storage Path</label>
-                    <input type="text" id="usb-storage-path" placeholder="/mnt/usb_recorder"
-                        class="w-full border border-gray-300 rounded px-3 py-2">
-                    <p class="text-xs text-gray-500 mt-1">Mount point for video storage</p>
                 </div>
 
                 <div>
@@ -677,6 +703,7 @@
         // Update preview on input
         document.addEventListener('DOMContentLoaded', () => {
             loadFilenameConfig();
+            loadStorageConfig();
             document.getElementById('left-suffix').addEventListener('input', updateFilenamePreview);
             document.getElementById('right-suffix').addEventListener('input', updateFilenamePreview);
         });
@@ -715,6 +742,55 @@
                 }
             } catch (error) {
                 alert('Error saving filename configuration: ' + error);
+            }
+        }
+
+        // Storage Path Configuration Functions
+        async function loadStorageConfig() {
+            try {
+                const response = await fetch('/api/config/storage');
+                const data = await response.json();
+
+                document.getElementById('storage-path').value = data.storage_path || '/mnt/usb_recorder';
+
+                const statusText = document.getElementById('storage-status-text');
+                if (data.exists && data.is_writable) {
+                    statusText.innerHTML = '<span class="text-green-600">Path exists and is writable</span>';
+                } else if (data.exists) {
+                    statusText.innerHTML = '<span class="text-yellow-600">Path exists but may not be writable</span>';
+                } else {
+                    statusText.innerHTML = '<span class="text-red-600">Path does not exist (will be created on save)</span>';
+                }
+            } catch (error) {
+                console.error('Error loading storage config:', error);
+            }
+        }
+
+        async function saveStorageConfig() {
+            const storagePath = document.getElementById('storage-path').value.trim();
+
+            if (!storagePath) {
+                alert('Storage path is required');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/config/storage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ storage_path: storagePath })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Storage location saved successfully!');
+                    loadStorageConfig();  // Refresh status
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error saving storage location: ' + error);
             }
         }
 
@@ -890,7 +966,6 @@
 
                 document.getElementById('camera-ip').value = config.camera_ip || '';
                 document.getElementById('camera-username').value = config.camera_username || '';
-                document.getElementById('usb-storage-path').value = config.usb_storage_path || '/mnt/usb_recorder';
 
                 // Don't show actual password, just indicate if one is set
                 if (config.camera_password && config.camera_password !== '') {
@@ -953,7 +1028,6 @@
             const cameraIp = document.getElementById('camera-ip').value.trim();
             const cameraUsername = document.getElementById('camera-username').value.trim();
             const cameraPassword = document.getElementById('camera-password').value;
-            const usbStoragePath = document.getElementById('usb-storage-path').value.trim();
 
             // Collect preset names
             const presetNames = {};
@@ -967,7 +1041,6 @@
             const configData = {
                 camera_ip: cameraIp,
                 camera_username: cameraUsername,
-                usb_storage_path: usbStoragePath,
                 preset_names: presetNames
             };
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from datetime import datetime
 import threading
 import time
+import scheduler
 
 # Configuration constants
 DEFAULT_MAX_DURATION = 14400  # 4 hours in seconds
@@ -55,16 +56,18 @@ def load_channel_suffixes():
 def get_recording_path():
     """Generate timestamped recording filenames with configured suffixes"""
     now = datetime.now()
-    
+
     # New format: YYYY_MMM_DD_HH:MM_L.wav
     timestamp = now.strftime('%Y_%b_%d_%H:%M')
-    
-    recordings_dir = Path.home() / 'recordings'
-    recordings_dir.mkdir(exist_ok=True)
-    
+
+    # Get storage path from config
+    storage_path = scheduler.get_system_config('storage_path', '/mnt/usb_recorder')
+    recordings_dir = Path(storage_path)
+    recordings_dir.mkdir(parents=True, exist_ok=True)
+
     # Load configured channel suffixes
     left_suffix, right_suffix = load_channel_suffixes()
-    
+
     return {
         'source_a': recordings_dir / f'{timestamp}_{left_suffix}.wav',
         'source_b': recordings_dir / f'{timestamp}_{right_suffix}.wav',

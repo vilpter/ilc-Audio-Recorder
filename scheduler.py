@@ -77,10 +77,27 @@ def init_database():
     ''')
     
     cursor.execute('''
-        INSERT OR IGNORE INTO system_config (key, value, updated_at) 
+        INSERT OR IGNORE INTO system_config (key, value, updated_at)
         VALUES ('channel_right_suffix', 'R', datetime('now'))
     ''')
-    
+
+    # Migrate usb_storage_path to unified storage_path
+    cursor.execute("SELECT value FROM system_config WHERE key = 'usb_storage_path'")
+    existing_usb = cursor.fetchone()
+
+    if existing_usb:
+        # Migrate existing value from usb_storage_path to storage_path
+        cursor.execute('''
+            INSERT OR IGNORE INTO system_config (key, value, updated_at)
+            VALUES ('storage_path', ?, datetime('now'))
+        ''', (existing_usb[0],))
+    else:
+        # Set default storage path
+        cursor.execute('''
+            INSERT OR IGNORE INTO system_config (key, value, updated_at)
+            VALUES ('storage_path', '/mnt/usb_recorder', datetime('now'))
+        ''')
+
     conn.commit()
     conn.close()
 

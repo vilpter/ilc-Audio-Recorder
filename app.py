@@ -8,6 +8,7 @@ from flask import Flask, render_template, jsonify, request, send_file, redirect,
 from flask_login import login_required, login_user, logout_user, current_user
 from pathlib import Path
 import json
+import os
 import subprocess
 import sqlite3
 from datetime import datetime
@@ -17,8 +18,6 @@ import scheduler
 import auth
 
 app = Flask(__name__)
-app.config['RECORDINGS_DIR'] = Path.home() / 'recordings'
-app.config['RECORDINGS_DIR'].mkdir(exist_ok=True)
 
 # Session configuration
 app.secret_key = auth.generate_secret_key()
@@ -28,6 +27,15 @@ auth.login_manager.init_app(app)
 
 # Initialize auth database
 auth.init_auth_db()
+
+
+def get_recordings_dir():
+    """Get the configured recordings directory path"""
+    storage_path = scheduler.get_system_config('storage_path', '/mnt/usb_recorder')
+    recordings_dir = Path(storage_path)
+    recordings_dir.mkdir(parents=True, exist_ok=True)
+    return recordings_dir
+
 
 # Global status tracker for audio
 recording_status = {
@@ -325,7 +333,7 @@ def update_schedule(job_id):
 @login_required
 def recordings_page():
     """File browser interface"""
-    recordings_dir = app.config['RECORDINGS_DIR']
+    recordings_dir = get_recordings_dir()
     files = []
     
     for file_path in sorted(recordings_dir.glob('*'), reverse=True):
@@ -346,7 +354,7 @@ def recordings_page():
 @login_required
 def download_file(filename):
     """Download a recording file"""
-    file_path = app.config['RECORDINGS_DIR'] / filename
+    file_path = get_recordings_dir() / filename
     if not file_path.exists() or not file_path.is_file():
         return jsonify({'error': 'File not found'}), 404
     
@@ -357,7 +365,7 @@ def download_file(filename):
 @login_required
 def delete_file(filename):
     """Delete a recording file"""
-    file_path = app.config['RECORDINGS_DIR'] / filename
+    file_path = get_recordings_dir() / filename
     if not file_path.exists():
         return jsonify({'error': 'File not found'}), 404
 
@@ -382,7 +390,7 @@ def batch_delete_files():
     errors = []
 
     for filename in files:
-        file_path = app.config['RECORDINGS_DIR'] / filename
+        file_path = get_recordings_dir() / filename
         if not file_path.exists():
             errors.append(f'{filename}: not found')
             continue
@@ -420,7 +428,7 @@ def batch_download_files():
     try:
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for filename in files:
-                file_path = app.config['RECORDINGS_DIR'] / filename
+                file_path = get_recordings_dir() / filename
                 if file_path.exists() and file_path.is_file():
                     zip_file.write(file_path, filename)
 
@@ -497,6 +505,53 @@ def save_filename_config():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# Storage Path Configuration Routes
+@app.route('/api/config/storage', methods=['GET'])
+@login_required
+def get_storage_config():
+    """Get current storage path configuration"""
+    storage_path = scheduler.get_system_config('storage_path', '/mnt/usb_recorder')
+
+    # Check if path exists and is writable
+    path_obj = Path(storage_path)
+    exists = path_obj.exists()
+    is_writable = exists and os.access(storage_path, os.W_OK)
+
+    return jsonify({
+        'storage_path': storage_path,
+        'exists': exists,
+        'is_writable': is_writable
+    })
+
+
+@app.route('/api/config/storage', methods=['POST'])
+@login_required
+def save_storage_config():
+    """Save storage path configuration"""
+    data = request.json
+    storage_path = data.get('storage_path', '').strip()
+
+    if not storage_path:
+        return jsonify({'error': 'Storage path is required'}), 400
+
+    # Validate path
+    path_obj = Path(storage_path)
+
+    # Try to create the directory if it doesn't exist
+    try:
+        path_obj.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        return jsonify({'error': f'Cannot create directory: {e}'}), 400
+
+    # Check if writable
+    if not os.access(storage_path, os.W_OK):
+        return jsonify({'error': 'Directory is not writable'}), 400
+
+    scheduler.set_system_config('storage_path', storage_path)
+
+    return jsonify({'success': True})
 
 
 # Calendar View Route (also accessible via /calendar for backwards compatibility)
@@ -915,7 +970,7 @@ def get_disk_space():
     """
     import shutil
 
-    recordings_dir = app.config['RECORDINGS_DIR']
+    recordings_dir = get_recordings_dir()
 
     try:
         disk_usage = shutil.disk_usage(recordings_dir)
@@ -1036,9 +1091,6 @@ def set_camera_config():
 
     if 'camera_password' in data and data['camera_password'] != '****':
         video_recorder.set_camera_config('camera_password', data['camera_password'])
-
-    if 'usb_storage_path' in data:
-        video_recorder.set_camera_config('usb_storage_path', data['usb_storage_path'].strip())
 
     if 'preset_names' in data:
         video_recorder.set_preset_names(data['preset_names'])

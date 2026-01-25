@@ -57,7 +57,7 @@ def get_camera_config():
         'camera_ip': scheduler.get_system_config('camera_ip', ''),
         'camera_username': scheduler.get_system_config('camera_username', ''),
         'camera_password': scheduler.get_system_config('camera_password', ''),
-        'usb_storage_path': scheduler.get_system_config('usb_storage_path', '/mnt/usb_recorder'),
+        'storage_path': scheduler.get_system_config('storage_path', '/mnt/usb_recorder'),
         'preset_names': json.loads(scheduler.get_system_config('preset_names', '{}'))
     }
 
@@ -346,7 +346,7 @@ def start_video_recording(duration_seconds=None):
     if not config['camera_ip']:
         raise RuntimeError("Camera IP not configured")
 
-    storage_path = config['usb_storage_path']
+    storage_path = config['storage_path']
 
     # Validate storage path
     valid, msg = validate_storage_path(storage_path)
@@ -711,7 +711,7 @@ def list_video_files():
         Dictionary with raw and processed file lists
     """
     config = get_camera_config()
-    storage_path = Path(config['usb_storage_path'])
+    storage_path = Path(config['storage_path'])
 
     raw_files = []
     processed_files = []
@@ -753,7 +753,7 @@ def get_storage_info():
         Dictionary with disk space info
     """
     config = get_camera_config()
-    storage_path = config['usb_storage_path']
+    storage_path = config['storage_path']
 
     try:
         valid, msg = validate_storage_path(storage_path)
