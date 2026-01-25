@@ -27,7 +27,7 @@
                 <div class="hidden md:flex items-center space-x-4 lg:space-x-6">
                     <div class="space-x-3 lg:space-x-4">
                         <a href="/" class="hover:underline font-semibold">Schedule</a>
-                        <a href="/camera" class="hover:underline">New/In Progress</a>
+                        <a href="/camera" class="hover:underline">Control</a>
                         <a href="/recordings" class="hover:underline">Recordings</a>
                         <a href="/settings" class="hover:underline">Settings</a>
                     </div>
@@ -48,7 +48,7 @@
             <div id="mobile-menu" class="hidden md:hidden mt-4 pt-4 border-t border-blue-500">
                 <div class="flex flex-col space-y-3">
                     <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded font-semibold">Schedule</a>
-                    <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded">New/In Progress</a>
+                    <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded">Control</a>
                     <a href="/recordings" class="hover:bg-blue-700 px-3 py-2 rounded">Recordings</a>
                     <a href="/settings" class="hover:bg-blue-700 px-3 py-2 rounded">Settings</a>
                 </div>
@@ -213,7 +213,7 @@
                     <div class="border-t pt-4">
                         <label class="flex items-center">
                             <input type="checkbox" id="modal-capture-video" class="mr-2">
-                            <span class="text-gray-700 font-medium">Also capture video from PTZ camera</span>
+                            <span class="text-gray-700 font-medium">Also capture video</span>
                         </label>
                         <p class="text-xs text-gray-500 mt-1 ml-6">
                             Requires camera to be configured in Settings. Video will be saved to USB storage.
@@ -376,9 +376,10 @@
                                        event.status === 'completed' ? 'bg-green-200 border-green-400' :
                                        'bg-blue-200 border-blue-400';
 
+                        const typeIndicator = event.capture_video ? 'A&V' : 'A';
                         html += `<div class="${bgColor} border rounded px-1 sm:px-2 py-0.5 sm:py-1 mb-1 text-xs cursor-pointer hover:opacity-80"
                                      onclick='event.stopPropagation(); showEventDetails(${JSON.stringify(event)})'>`;
-                        html += `<div class="font-semibold truncate">${event.name}</div>`;
+                        html += `<div class="font-semibold truncate">${event.name} <span class="opacity-60">[${typeIndicator}]</span></div>`;
                         html += `<div class="hidden sm:block">${formatTimeRangeShort(event.start_time, event.duration)}</div>`;
                         html += `</div>`;
                     });
@@ -463,10 +464,12 @@
                 }
             }
             
+            const recordingType = event.capture_video ? 'Audio & Video' : 'Audio only';
             infoDiv.innerHTML = `
                 <div class="space-y-2">
                     <div><strong>Time:</strong> ${formatTimeRangeFull(event.start_time, event.duration)}</div>
                     <div><strong>Duration:</strong> ${event.duration / 60} minutes</div>
+                    <div><strong>Type:</strong> ${recordingType}</div>
                     <div><strong>Status:</strong> <span class="font-semibold ${
                         event.status === 'pending' ? 'text-blue-600' :
                         event.status === 'completed' ? 'text-green-600' :

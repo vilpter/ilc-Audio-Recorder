@@ -2,6 +2,23 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.5.1] - 2026-01-24
+
+### Changed
+- **Navigation** - Renamed "New/In Progress" to "Control" across all pages
+- **Settings** - Renamed "Recording Filename Configuration" to "Audio Filename Nomenclature"
+- **Calendar** - Simplified "Also capture video" label (removed "from PTZ camera")
+- **Calendar Events** - Added [A] or [A&V] indicator to show recording type
+- **Event Details** - Shows "Audio only" or "Audio & Video" type in popup
+
+### Added
+- **ARCHITECTURE.md** - New consolidated technical documentation with API reference, database schema, and design decisions
+
+### Removed
+- **docs/ folder** - Removed obsolete planning documents (content migrated to ARCHITECTURE.md)
+
+---
+
 ## [1.5.0] - 2026-01-24
 
 ### Changed

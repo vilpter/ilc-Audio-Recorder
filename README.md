@@ -456,10 +456,19 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 ## Roadmap
 
 ### Planned Features
+- Add support for multiple user accounts
+- In Controls, add an indication of any other users who are currently logged in.
 - Audio post-processing (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate
 - Note the last date of download for files
 
-### Recently Completed (v1.5.0)
+### Recently Completed (v1.5.1)
+- Renamed "New/In Progress" to "Control" in navigation
+- Added A/A&V indicators to calendar for audio vs audio+video recordings
+- Renamed "Recording Filename Configuration" to "Audio Filename Nomenclature"
+- Simplified "Also capture video" label in Edit Recording popup
+- Consolidated documentation (new ARCHITECTURE.md, removed obsolete docs/)
+
+### Previously Completed (v1.5.0)
 - Unified recording controls (Audio/Video/Both)
 - Combined status panel for audio and video
 - Simplified navigation and workflow
