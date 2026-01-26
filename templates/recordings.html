@@ -1,77 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Church Recording - Recordings</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen">
-    <nav class="bg-blue-600 text-white p-4 shadow-lg">
-        <div class="container mx-auto">
-            <!-- Mobile header -->
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-xl md:text-2xl font-bold">Church Recording</h1>
-                    <span class="text-sm md:hidden opacity-75">Recordings</span>
-                </div>
+{% extends "base.html" %}
 
-                <!-- Mobile menu button -->
-                <button id="mobile-menu-btn" class="md:hidden p-2 rounded hover:bg-blue-700" onclick="toggleMobileMenu()">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-                    </svg>
-                </button>
+{% block title %}Church Recording - Recordings{% endblock %}
 
-                <!-- Desktop navigation -->
-                <div class="hidden md:flex items-center space-x-4 lg:space-x-6">
-                    <div class="space-x-3 lg:space-x-4">
-                        <a href="/" class="hover:underline">Schedule</a>
-                        <a href="/camera" class="hover:underline">Control</a>
-                        <a href="/recordings" class="hover:underline font-semibold">Recordings</a>
-                        <a href="/settings" class="hover:underline">Settings</a>
-                    </div>
-                    <div id="current-datetime" class="hidden lg:block text-sm font-mono bg-blue-700 px-3 py-1 rounded">
-                        Loading...
-                    </div>
-                    <div id="disk-space" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer" title="Click for details">
-                        <span id="disk-text">Loading...</span>
-                    </div>
-                    <div class="border-l border-blue-400 pl-3 lg:pl-4 flex items-center space-x-2 lg:space-x-3">
-                        <span class="text-sm hidden lg:inline">{{ current_user.username }}</span>
-                        <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
-                    </div>
-                </div>
-            </div>
+{% block page_subtitle %}Recordings{% endblock %}
 
-            <!-- Mobile menu -->
-            <div id="mobile-menu" class="hidden md:hidden mt-4 pt-4 border-t border-blue-500">
-                <div class="flex flex-col space-y-3">
-                    <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded">Schedule</a>
-                    <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded">Control</a>
-                    <a href="/recordings" class="hover:bg-blue-700 px-3 py-2 rounded font-semibold">Recordings</a>
-                    <a href="/settings" class="hover:bg-blue-700 px-3 py-2 rounded">Settings</a>
-                </div>
-                <div class="mt-4 pt-4 border-t border-blue-500 flex flex-wrap gap-2">
-                    <div id="disk-space-mobile" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
-                        <span id="disk-text-mobile">Loading...</span>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <span class="text-sm">{{ current_user.username }}</span>
-                        <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </nav>
-
-    <script>
-        function toggleMobileMenu() {
-            const menu = document.getElementById('mobile-menu');
-            menu.classList.toggle('hidden');
-        }
-    </script>
-
+{% block content %}
     <div class="container mx-auto p-6">
         <div class="bg-white rounded-lg shadow-md p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
@@ -136,7 +69,7 @@
                                     class="inline-block bg-green-500 hover:bg-green-600 text-white text-sm px-3 py-1 rounded">
                                     Download
                                 </a>
-                                <button onclick="deleteFile('{{ file.name }}', {{ loop.index }})" 
+                                <button onclick="deleteFile('{{ file.name }}', {{ loop.index }})"
                                     class="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded">
                                     Delete
                                 </button>
@@ -160,7 +93,7 @@
             {% else %}
             <div class="text-center py-12">
                 <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 <h3 class="mt-2 text-lg font-medium text-gray-900">No recordings yet</h3>
@@ -202,80 +135,10 @@
             </div>
         </div>
     </div>
+{% endblock %}
 
+{% block extra_scripts %}
     <script>
-        // Update current date/time display
-        function updateDateTime() {
-            const now = new Date();
-            const options = { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            };
-            document.getElementById('current-datetime').textContent = 
-                now.toLocaleString('en-US', options);
-        }
-        
-        // Update immediately and then every second
-        updateDateTime();
-        setInterval(updateDateTime, 1000);
-
-        // Disk space monitoring
-        async function updateDiskSpace() {
-            try {
-                const response = await fetch('/api/system/disk');
-                const data = await response.json();
-
-                if (data.error) {
-                    document.getElementById('disk-text').textContent = 'Disk: Error';
-                    const mobileText = document.getElementById('disk-text-mobile');
-                    if (mobileText) mobileText.textContent = 'Disk: Error';
-                    return;
-                }
-
-                const diskSpace = document.getElementById('disk-space');
-                const diskText = document.getElementById('disk-text');
-                const diskSpaceMobile = document.getElementById('disk-space-mobile');
-                const diskTextMobile = document.getElementById('disk-text-mobile');
-
-                // Format display: "X.X GB / Y.Y GB"
-                const displayText = `${data.used_gb} / ${data.total_gb} GB`;
-                diskText.textContent = displayText;
-                if (diskTextMobile) diskTextMobile.textContent = displayText;
-
-                // Set title with more details
-                diskSpace.title = `Used: ${data.used_gb} GB of ${data.total_gb} GB (${data.percent_used}%)\n` +
-                    `Free: ${data.free_gb} GB\n` +
-                    `Recording time remaining: ~${data.hours_remaining} hours`;
-
-                // Determine class based on warning state
-                let className = 'text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer';
-                if (data.low_space_warning || data.scheduled_warning) {
-                    className = 'text-sm font-mono bg-red-600 px-3 py-1 rounded cursor-pointer animate-pulse';
-                } else if (data.hours_remaining < 24) {
-                    className = 'text-sm font-mono bg-yellow-600 px-3 py-1 rounded cursor-pointer';
-                }
-
-                diskSpace.className = className;
-                if (diskSpaceMobile) diskSpaceMobile.className = className;
-
-            } catch (error) {
-                console.error('Error fetching disk space:', error);
-                document.getElementById('disk-text').textContent = 'Disk: --';
-                const mobileText = document.getElementById('disk-text-mobile');
-                if (mobileText) mobileText.textContent = 'Disk: --';
-            }
-        }
-
-        // Update disk space immediately and every 30 seconds
-        updateDiskSpace();
-        setInterval(updateDiskSpace, 30000);
-
         // Selection management
         function getSelectedFiles() {
             const checkboxes = document.querySelectorAll('.file-checkbox:checked');
@@ -405,17 +268,17 @@
                 });
 
                 const result = await response.json();
-                
+
                 if (result.error) {
                     alert('Error: ' + result.error);
                 } else {
                     // Remove row from table
                     document.getElementById(`file-row-${rowIndex}`).remove();
-                    
+
                     // Update file count
                     const countElem = document.getElementById('file-count');
                     countElem.textContent = parseInt(countElem.textContent) - 1;
-                    
+
                     // Reload if no files left
                     if (parseInt(countElem.textContent) === 0) {
                         location.reload();
@@ -488,5 +351,4 @@
         updateVideoStorage();
         setInterval(loadVideoFiles, 10000);
     </script>
-</body>
-</html>
+{% endblock %}

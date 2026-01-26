@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Church Recording{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="sticky top-0 z-50 bg-blue-600 text-white p-4 shadow-lg">
+        <div class="container mx-auto">
+            <!-- Mobile header -->
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold">Church Recording</h1>
+                    <span class="text-sm md:hidden opacity-75">{% block page_subtitle %}{% endblock %}</span>
+                </div>
+
+                <!-- Mobile menu button -->
+                <button id="mobile-menu-btn" class="md:hidden p-2 rounded hover:bg-blue-700" onclick="toggleMobileMenu()">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path id="menu-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+
+                <!-- Desktop navigation -->
+                <div class="hidden md:flex items-center space-x-4 lg:space-x-6">
+                    <div class="space-x-3 lg:space-x-4">
+                        <a href="/" class="hover:underline {% if request.path == '/' or request.path == '/calendar' %}font-semibold{% endif %}">Schedule</a>
+                        <a href="/camera" class="hover:underline {% if request.path == '/camera' %}font-semibold{% endif %}">Control</a>
+                        <a href="/recordings" class="hover:underline {% if request.path == '/recordings' %}font-semibold{% endif %}">Recordings</a>
+                        <a href="/settings" class="hover:underline {% if request.path == '/settings' %}font-semibold{% endif %}">Settings</a>
+                    </div>
+                    <div id="current-datetime" class="hidden lg:block text-sm font-mono bg-blue-700 px-3 py-1 rounded">
+                        Loading...
+                    </div>
+                    <div id="disk-space" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer" title="Click for details">
+                        <span id="disk-text">Loading...</span>
+                    </div>
+                    <div class="border-l border-blue-400 pl-3 lg:pl-4 flex items-center space-x-2 lg:space-x-3">
+                        <span class="text-sm hidden lg:inline">{{ current_user.username }}</span>
+                        <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="hidden md:hidden mt-4 pt-4 border-t border-blue-500">
+                <div class="flex flex-col space-y-3">
+                    <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded {% if request.path == '/' or request.path == '/calendar' %}font-semibold{% endif %}">Schedule</a>
+                    <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded {% if request.path == '/camera' %}font-semibold{% endif %}">Control</a>
+                    <a href="/recordings" class="hover:bg-blue-700 px-3 py-2 rounded {% if request.path == '/recordings' %}font-semibold{% endif %}">Recordings</a>
+                    <a href="/settings" class="hover:bg-blue-700 px-3 py-2 rounded {% if request.path == '/settings' %}font-semibold{% endif %}">Settings</a>
+                </div>
+                <div class="mt-4 pt-4 border-t border-blue-500 flex flex-wrap gap-2">
+                    <div id="disk-space-mobile" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
+                        <span id="disk-text-mobile">Loading...</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm">{{ current_user.username }}</span>
+                        <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    {% block content %}{% endblock %}
+
+    <script>
+        // Mobile menu toggle
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        // Close mobile menu when resizing to desktop
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 768) { // md breakpoint
+                const menu = document.getElementById('mobile-menu');
+                if (menu) menu.classList.add('hidden');
+            }
+        });
+
+        // Server time offset (to avoid client clock sync issues)
+        let serverTimeOffset = 0;
+
+        // Get current time using server time offset
+        function getCurrentTime() {
+            return new Date(Date.now() + serverTimeOffset);
+        }
+
+        // Fetch server time and calculate offset
+        async function syncServerTime() {
+            try {
+                const clientBefore = Date.now();
+                const response = await fetch('/api/system/time');
+                const clientAfter = Date.now();
+                const data = await response.json();
+
+                if (data.server_time) {
+                    const serverTime = new Date(data.server_time).getTime();
+                    const clientTime = (clientBefore + clientAfter) / 2; // Account for network latency
+                    serverTimeOffset = serverTime - clientTime;
+                }
+            } catch (error) {
+                console.error('Error syncing server time:', error);
+            }
+        }
+
+        // Update current date/time display
+        function updateDateTime() {
+            const now = getCurrentTime();
+            const options = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            };
+            const datetimeEl = document.getElementById('current-datetime');
+            if (datetimeEl) {
+                datetimeEl.textContent = now.toLocaleString('en-US', options);
+            }
+        }
+
+        // Disk space monitoring
+        async function updateDiskSpace() {
+            try {
+                const response = await fetch('/api/system/disk');
+                const data = await response.json();
+
+                if (data.error) {
+                    const diskText = document.getElementById('disk-text');
+                    if (diskText) diskText.textContent = 'Disk: Error';
+                    const mobileText = document.getElementById('disk-text-mobile');
+                    if (mobileText) mobileText.textContent = 'Disk: Error';
+                    return;
+                }
+
+                const diskSpace = document.getElementById('disk-space');
+                const diskText = document.getElementById('disk-text');
+                const diskSpaceMobile = document.getElementById('disk-space-mobile');
+                const diskTextMobile = document.getElementById('disk-text-mobile');
+
+                // Format display: "X.X GB / Y.Y GB"
+                const displayText = `${data.used_gb} / ${data.total_gb} GB`;
+                if (diskText) diskText.textContent = displayText;
+                if (diskTextMobile) diskTextMobile.textContent = displayText;
+
+                // Set title with more details
+                const titleText = `Used: ${data.used_gb} GB of ${data.total_gb} GB (${data.percent_used}%)\n` +
+                    `Free: ${data.free_gb} GB\n` +
+                    `Recording time remaining: ~${data.hours_remaining} hours`;
+                if (diskSpace) diskSpace.title = titleText;
+
+                // Determine class based on warning state
+                let className = 'text-sm font-mono bg-blue-700 px-3 py-1 rounded cursor-pointer';
+                if (data.low_space_warning || data.scheduled_warning) {
+                    className = 'text-sm font-mono bg-red-600 px-3 py-1 rounded cursor-pointer animate-pulse';
+                } else if (data.hours_remaining < 24) {
+                    className = 'text-sm font-mono bg-yellow-600 px-3 py-1 rounded cursor-pointer';
+                }
+
+                if (diskSpace) diskSpace.className = className;
+                if (diskSpaceMobile) diskSpaceMobile.className = className;
+
+            } catch (error) {
+                console.error('Error fetching disk space:', error);
+                const diskText = document.getElementById('disk-text');
+                if (diskText) diskText.textContent = 'Disk: --';
+                const mobileText = document.getElementById('disk-text-mobile');
+                if (mobileText) mobileText.textContent = 'Disk: --';
+            }
+        }
+
+        // Sync server time on load and every 5 minutes
+        syncServerTime();
+        setInterval(syncServerTime, 300000);
+
+        // Update datetime immediately and then every second
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+
+        // Update disk space immediately and every 30 seconds
+        updateDiskSpace();
+        setInterval(updateDiskSpace, 30000);
+    </script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

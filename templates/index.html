@@ -1,39 +1,15 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Recorder - Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen">
-    <nav class="bg-blue-600 text-white p-4 shadow-lg">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold">Audio Recorder</h1>
-            <div class="flex items-center space-x-6">
-                <div class="space-x-4">
-                    <a href="/" class="hover:underline font-semibold">Dashboard</a>
-                    <a href="/schedule" class="hover:underline">Schedule</a>
-                    <a href="/calendar" class="hover:underline">Calendar</a>
-                    <a href="/recordings" class="hover:underline">Recordings</a>
-                    <a href="/settings" class="hover:underline">Settings</a>
-                </div>
-                <div id="current-datetime" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">
-                    Loading...
-                </div>
-                <div class="border-l border-blue-400 pl-4 flex items-center space-x-3">
-                    <span class="text-sm">{{ current_user.username }}</span>
-                    <a href="/logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">Logout</a>
-                </div>
-            </div>
-        </div>
-    </nav>
+{% extends "base.html" %}
 
+{% block title %}Audio Recorder - Dashboard{% endblock %}
+
+{% block page_subtitle %}Dashboard{% endblock %}
+
+{% block content %}
     <div class="container mx-auto p-6">
         <!-- Status Card -->
         <div class="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 class="text-xl font-semibold mb-4">Recording Status</h2>
-            
+
             <div id="status-indicator" class="flex items-center space-x-3 mb-4">
                 <div id="status-light" class="w-4 h-4 rounded-full bg-gray-400"></div>
                 <span id="status-text" class="text-lg font-medium text-gray-600">Idle</span>
@@ -50,11 +26,11 @@
 
             <!-- Manual Controls -->
             <div class="flex space-x-4">
-                <button id="start-btn" onclick="startRecording()" 
+                <button id="start-btn" onclick="startRecording()"
                     class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-6 rounded">
                     Start Recording
                 </button>
-                <button id="stop-btn" onclick="stopRecording()" 
+                <button id="stop-btn" onclick="stopRecording()"
                     class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded hidden">
                     Stop Recording
                 </button>
@@ -97,29 +73,10 @@
             </div>
         </div>
     </div>
+{% endblock %}
 
+{% block extra_scripts %}
     <script>
-        // Update current date/time display
-        function updateDateTime() {
-            const now = new Date();
-            const options = { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            };
-            document.getElementById('current-datetime').textContent = 
-                now.toLocaleString('en-US', options);
-        }
-        
-        // Update immediately and then every second
-        updateDateTime();
-        setInterval(updateDateTime, 1000);
-
         // Poll status every 2 seconds
         setInterval(updateStatus, 2000);
         updateStatus(); // Initial load
@@ -128,7 +85,7 @@
             try {
                 const response = await fetch('/api/status');
                 const status = await response.json();
-                
+
                 const statusLight = document.getElementById('status-light');
                 const statusText = document.getElementById('status-text');
                 const recordingInfo = document.getElementById('recording-info');
@@ -139,11 +96,11 @@
                     statusLight.className = 'w-4 h-4 rounded-full bg-red-500 animate-pulse';
                     statusText.textContent = 'Recording';
                     statusText.className = 'text-lg font-medium text-red-600';
-                    
-                    document.getElementById('start-time').textContent = 
+
+                    document.getElementById('start-time').textContent =
                         new Date(status.start_time).toLocaleString();
                     document.getElementById('job-id').textContent = status.current_job;
-                    
+
                     recordingInfo.classList.remove('hidden');
                     startBtn.classList.add('hidden');
                     stopBtn.classList.remove('hidden');
@@ -151,7 +108,7 @@
                     statusLight.className = 'w-4 h-4 rounded-full bg-gray-400';
                     statusText.textContent = 'Idle';
                     statusText.className = 'text-lg font-medium text-gray-600';
-                    
+
                     recordingInfo.classList.add('hidden');
                     startBtn.classList.remove('hidden');
                     stopBtn.classList.add('hidden');
@@ -195,12 +152,12 @@
 
         async function stopRecording() {
             if (!confirm('Stop the current recording?')) return;
-            
+
             try {
                 const response = await fetch('/api/record/stop', {
                     method: 'POST'
                 });
-                
+
                 const result = await response.json();
                 if (result.error) {
                     alert('Error: ' + result.error);
@@ -216,5 +173,4 @@
             startRecording();
         }
     </script>
-</body>
-</html>
+{% endblock %}
