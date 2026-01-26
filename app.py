@@ -366,13 +366,19 @@ def create_schedule():
         return jsonify({'error': error_msg}), 400
 
     try:
+        # Convert recurrence_pattern back to JSON string if it's a dict
+        recurrence_pattern = validated['recurrence_pattern']
+        if recurrence_pattern is not None and isinstance(recurrence_pattern, dict):
+            import json
+            recurrence_pattern = json.dumps(recurrence_pattern)
+
         job_id = scheduler.create_job(
             start_time=validated['start_time'],
             duration=validated['duration'],
             name=validated['name'],
             notes=validated['notes'],
             is_recurring=validated['is_recurring'],
-            recurrence_pattern=validated['recurrence_pattern'],
+            recurrence_pattern=recurrence_pattern,
             allow_override=validated['allow_override'],
             capture_video=validated['capture_video']
         )
@@ -452,6 +458,12 @@ def update_schedule(job_id):
         return jsonify({'error': error_msg}), 400
 
     try:
+        # Convert recurrence_pattern back to JSON string if it's a dict
+        recurrence_pattern = validated['recurrence_pattern']
+        if recurrence_pattern is not None and isinstance(recurrence_pattern, dict):
+            import json
+            recurrence_pattern = json.dumps(recurrence_pattern)
+
         scheduler.update_job(
             job_id=job_id,
             start_time=validated['start_time'],
@@ -459,7 +471,7 @@ def update_schedule(job_id):
             name=validated['name'],
             notes=validated['notes'],
             is_recurring=validated['is_recurring'],
-            recurrence_pattern=validated['recurrence_pattern'],
+            recurrence_pattern=recurrence_pattern,
             allow_override=validated['allow_override'],
             capture_video=validated['capture_video']
         )
