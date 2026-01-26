@@ -9,6 +9,7 @@ import secrets
 from pathlib import Path
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin
+import db_utils
 
 # Database path - same directory as scheduler database
 AUTH_DB_PATH = Path.home() / '.audio-recorder' / 'auth.db'
@@ -35,11 +36,9 @@ class User(UserMixin):
     @staticmethod
     def get_by_id(user_id):
         """Load user by ID"""
-        conn = sqlite3.connect(AUTH_DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, username, password_hash FROM users WHERE id = ?', (user_id,))
-        row = cursor.fetchone()
-        conn.close()
+        row = db_utils.fetch_one(AUTH_DB_PATH,
+            'SELECT id, username, password_hash FROM users WHERE id = ?',
+            (user_id,))
 
         if row:
             return User(row[0], row[1], row[2])
@@ -48,11 +47,9 @@ class User(UserMixin):
     @staticmethod
     def get_by_username(username):
         """Load user by username"""
-        conn = sqlite3.connect(AUTH_DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, username, password_hash FROM users WHERE username = ?', (username,))
-        row = cursor.fetchone()
-        conn.close()
+        row = db_utils.fetch_one(AUTH_DB_PATH,
+            'SELECT id, username, password_hash FROM users WHERE username = ?',
+            (username,))
 
         if row:
             return User(row[0], row[1], row[2])
@@ -63,20 +60,17 @@ class User(UserMixin):
         """Create new user"""
         password_hash = generate_password_hash(password)
 
-        conn = sqlite3.connect(AUTH_DB_PATH)
-        cursor = conn.cursor()
-
         try:
-            cursor.execute(
-                'INSERT INTO users (username, password_hash) VALUES (?, ?)',
-                (username, password_hash)
-            )
-            conn.commit()
-            user_id = cursor.lastrowid
-            conn.close()
+            def _create_user(conn, cursor):
+                cursor.execute(
+                    'INSERT INTO users (username, password_hash) VALUES (?, ?)',
+                    (username, password_hash)
+                )
+                return cursor.lastrowid
+
+            user_id = db_utils.execute_transaction(AUTH_DB_PATH, _create_user)
             return User(user_id, username, password_hash)
         except sqlite3.IntegrityError:
-            conn.close()
             return None
 
     @staticmethod
@@ -84,24 +78,16 @@ class User(UserMixin):
         """Update user password"""
         password_hash = generate_password_hash(new_password)
 
-        conn = sqlite3.connect(AUTH_DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute(
+        db_utils.execute_query(AUTH_DB_PATH,
             'UPDATE users SET password_hash = ? WHERE username = ?',
-            (password_hash, username)
-        )
-        conn.commit()
-        conn.close()
+            (password_hash, username), commit=True)
 
     @staticmethod
     def count_users():
         """Count total users in database"""
-        conn = sqlite3.connect(AUTH_DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM users')
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count
+        row = db_utils.fetch_one(AUTH_DB_PATH,
+            'SELECT COUNT(*) FROM users')
+        return row[0] if row else 0
 
 
 @login_manager.user_loader
@@ -115,21 +101,18 @@ def init_auth_db():
     # Ensure directory exists
     AUTH_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(AUTH_DB_PATH)
-    cursor = conn.cursor()
+    def _init_transaction(conn, cursor):
+        # Create users table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
-    # Create users table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    conn.commit()
-    conn.close()
+    db_utils.execute_transaction(AUTH_DB_PATH, _init_transaction)
 
 
 def generate_secret_key():

@@ -16,6 +16,8 @@ import recorder
 import video_recorder
 import scheduler
 import auth
+import db_utils
+import validation
 
 app = Flask(__name__)
 
@@ -184,10 +186,35 @@ def get_status():
 @login_required
 def start_recording():
     """Manual recording start (audio, optionally with video)"""
-    data = request.json
-    duration = data.get('duration', 3600)  # Default 1 hour
-    allow_override = data.get('allow_override', False)
-    capture_video = data.get('capture_video', False)
+    data = request.json or {}
+
+    # Validate input parameters
+    schema = {
+        'duration': {
+            'type': 'duration',
+            'required': False,
+            'default': 3600,
+            'allow_override': data.get('allow_override', False)
+        },
+        'allow_override': {
+            'type': 'boolean',
+            'required': False,
+            'default': False
+        },
+        'capture_video': {
+            'type': 'boolean',
+            'required': False,
+            'default': False
+        }
+    }
+
+    valid, error_msg, validated = validation.validate_request_data(data, schema)
+    if not valid:
+        return jsonify({'error': error_msg}), 400
+
+    duration = validated['duration']
+    allow_override = validated['allow_override']
+    capture_video = validated['capture_video']
 
     if recording_status['is_recording']:
         return jsonify({'error': 'Recording already in progress'}), 400
@@ -277,17 +304,69 @@ def stop_recording():
 @login_required
 def create_schedule():
     """Create new scheduled recording"""
-    data = request.json
+    data = request.json or {}
+
+    # Validate input parameters
+    schema = {
+        'start_time': {
+            'type': 'datetime',
+            'required': True
+        },
+        'duration': {
+            'type': 'duration',
+            'required': True,
+            'allow_override': data.get('allow_override', False)
+        },
+        'name': {
+            'type': 'string',
+            'required': False,
+            'default': 'Unnamed Recording',
+            'max_length': 255,
+            'allow_empty': False
+        },
+        'notes': {
+            'type': 'string',
+            'required': False,
+            'default': '',
+            'max_length': 1000,
+            'allow_empty': True
+        },
+        'is_recurring': {
+            'type': 'boolean',
+            'required': False,
+            'default': False
+        },
+        'recurrence_pattern': {
+            'type': 'json',
+            'required': False,
+            'default': None
+        },
+        'allow_override': {
+            'type': 'boolean',
+            'required': False,
+            'default': False
+        },
+        'capture_video': {
+            'type': 'boolean',
+            'required': False,
+            'default': False
+        }
+    }
+
+    valid, error_msg, validated = validation.validate_request_data(data, schema)
+    if not valid:
+        return jsonify({'error': error_msg}), 400
+
     try:
         job_id = scheduler.create_job(
-            start_time=data['start_time'],
-            duration=data['duration'],
-            name=data.get('name', 'Unnamed Recording'),
-            notes=data.get('notes', ''),
-            is_recurring=data.get('is_recurring', False),
-            recurrence_pattern=data.get('recurrence_pattern'),
-            allow_override=data.get('allow_override', False),
-            capture_video=data.get('capture_video', False)
+            start_time=validated['start_time'],
+            duration=validated['duration'],
+            name=validated['name'],
+            notes=validated['notes'],
+            is_recurring=validated['is_recurring'],
+            recurrence_pattern=validated['recurrence_pattern'],
+            allow_override=validated['allow_override'],
+            capture_video=validated['capture_video']
         )
         return jsonify({'success': True, 'job_id': job_id})
     except Exception as e:
@@ -309,18 +388,72 @@ def delete_schedule(job_id):
 @login_required
 def update_schedule(job_id):
     """Update existing scheduled recording"""
-    data = request.json
+    data = request.json or {}
+
+    # Validate input parameters (all optional for updates)
+    schema = {
+        'start_time': {
+            'type': 'datetime',
+            'required': False,
+            'default': None
+        },
+        'duration': {
+            'type': 'duration',
+            'required': False,
+            'default': None,
+            'allow_none': True,  # None means don't update
+            'allow_override': data.get('allow_override', False) if data.get('duration') is not None else False
+        },
+        'name': {
+            'type': 'string',
+            'required': False,
+            'default': None,
+            'max_length': 255
+        },
+        'notes': {
+            'type': 'string',
+            'required': False,
+            'default': None,
+            'max_length': 1000,
+            'allow_empty': True
+        },
+        'is_recurring': {
+            'type': 'boolean',
+            'required': False,
+            'default': None
+        },
+        'recurrence_pattern': {
+            'type': 'json',
+            'required': False,
+            'default': None
+        },
+        'allow_override': {
+            'type': 'boolean',
+            'required': False,
+            'default': None
+        },
+        'capture_video': {
+            'type': 'boolean',
+            'required': False,
+            'default': None
+        }
+    }
+
+    valid, error_msg, validated = validation.validate_request_data(data, schema)
+    if not valid:
+        return jsonify({'error': error_msg}), 400
+
     try:
         scheduler.update_job(
             job_id=job_id,
-            start_time=data.get('start_time'),
-            duration=data.get('duration'),
-            name=data.get('name'),
-            notes=data.get('notes'),
-            is_recurring=data.get('is_recurring'),
-            recurrence_pattern=data.get('recurrence_pattern'),
-            allow_override=data.get('allow_override'),
-            capture_video=data.get('capture_video')
+            start_time=validated['start_time'],
+            duration=validated['duration'],
+            name=validated['name'],
+            notes=validated['notes'],
+            is_recurring=validated['is_recurring'],
+            recurrence_pattern=validated['recurrence_pattern'],
+            allow_override=validated['allow_override'],
+            capture_video=validated['capture_video']
         )
         return jsonify({'success': True})
     except ValueError as e:
@@ -450,19 +583,14 @@ def batch_download_files():
 def get_filename_config():
     """Get current filename configuration"""
     try:
-        conn = sqlite3.connect(scheduler.DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT value FROM system_config WHERE key = 'channel_left_suffix'")
-        left_row = cursor.fetchone()
+        left_row = db_utils.fetch_one(scheduler.DB_PATH,
+            "SELECT value FROM system_config WHERE key = 'channel_left_suffix'")
         left_suffix = left_row[0] if left_row else 'L'
-        
-        cursor.execute("SELECT value FROM system_config WHERE key = 'channel_right_suffix'")
-        right_row = cursor.fetchone()
+
+        right_row = db_utils.fetch_one(scheduler.DB_PATH,
+            "SELECT value FROM system_config WHERE key = 'channel_right_suffix'")
         right_suffix = right_row[0] if right_row else 'R'
-        
-        conn.close()
-        
+
         return jsonify({
             'left_suffix': left_suffix,
             'right_suffix': right_suffix
@@ -486,22 +614,19 @@ def save_filename_config():
         return jsonify({'error': 'Suffixes must be 10 characters or less'}), 400
     
     try:
-        conn = sqlite3.connect(scheduler.DB_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT OR REPLACE INTO system_config (key, value, updated_at)
-            VALUES ('channel_left_suffix', ?, datetime('now'))
-        ''', (left_suffix,))
-        
-        cursor.execute('''
-            INSERT OR REPLACE INTO system_config (key, value, updated_at)
-            VALUES ('channel_right_suffix', ?, datetime('now'))
-        ''', (right_suffix,))
-        
-        conn.commit()
-        conn.close()
-        
+        def _update_config(conn, cursor):
+            cursor.execute('''
+                INSERT OR REPLACE INTO system_config (key, value, updated_at)
+                VALUES ('channel_left_suffix', ?, datetime('now'))
+            ''', (left_suffix,))
+
+            cursor.execute('''
+                INSERT OR REPLACE INTO system_config (key, value, updated_at)
+                VALUES ('channel_right_suffix', ?, datetime('now'))
+            ''', (right_suffix,))
+
+        db_utils.execute_transaction(scheduler.DB_PATH, _update_config)
+
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -798,23 +923,20 @@ def export_data(export_type):
         
         import shutil
         shutil.copy(scheduler.DB_PATH, tmp_path)
-        
+
         # Remove unwanted tables based on export type
-        conn = sqlite3.connect(tmp_path)
-        cursor = conn.cursor()
-        
-        if export_type == 'schedules':
-            # Keep only schedules
-            cursor.execute("DROP TABLE IF EXISTS system_config")
-            cursor.execute("DROP TABLE IF EXISTS recording_templates")
-        else:  # config
-            # Keep only system configuration
-            cursor.execute("DROP TABLE IF EXISTS scheduled_jobs")
-            cursor.execute("DROP TABLE IF EXISTS recording_templates")
-        
-        conn.commit()
-        conn.close()
-        
+        def _cleanup_export(conn, cursor):
+            if export_type == 'schedules':
+                # Keep only schedules
+                cursor.execute("DROP TABLE IF EXISTS system_config")
+                cursor.execute("DROP TABLE IF EXISTS recording_templates")
+            else:  # config
+                # Keep only system configuration
+                cursor.execute("DROP TABLE IF EXISTS scheduled_jobs")
+                cursor.execute("DROP TABLE IF EXISTS recording_templates")
+
+        db_utils.execute_transaction(tmp_path, _cleanup_export)
+
         return send_file(tmp_path, as_attachment=True, download_name=filename)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -847,68 +969,78 @@ def import_data(import_type):
         backup_dir.mkdir(parents=True, exist_ok=True)
         backup_filename = f'{import_type}{expected_ext}.last'
         backup_path = backup_dir / backup_filename
-        
+
         # Backup current state
-        conn_src = sqlite3.connect(scheduler.DB_PATH)
-        conn_backup = sqlite3.connect(str(backup_path))
-        conn_src.backup(conn_backup)
-        
-        # Remove unwanted tables from backup
-        cursor_backup = conn_backup.cursor()
-        if import_type == 'schedules':
-            cursor_backup.execute("DROP TABLE IF EXISTS system_config")
-            cursor_backup.execute("DROP TABLE IF EXISTS recording_templates")
-        else:  # config
-            cursor_backup.execute("DROP TABLE IF EXISTS scheduled_jobs")
-            cursor_backup.execute("DROP TABLE IF EXISTS recording_templates")
-        
-        conn_backup.commit()
-        conn_src.close()
-        conn_backup.close()
-        
+        conn_src = None
+        conn_backup = None
+        try:
+            conn_src = sqlite3.connect(scheduler.DB_PATH)
+            conn_backup = sqlite3.connect(str(backup_path))
+            conn_src.backup(conn_backup)
+
+            # Remove unwanted tables from backup
+            cursor_backup = conn_backup.cursor()
+            if import_type == 'schedules':
+                cursor_backup.execute("DROP TABLE IF EXISTS system_config")
+                cursor_backup.execute("DROP TABLE IF EXISTS recording_templates")
+            else:  # config
+                cursor_backup.execute("DROP TABLE IF EXISTS scheduled_jobs")
+                cursor_backup.execute("DROP TABLE IF EXISTS recording_templates")
+
+            conn_backup.commit()
+        finally:
+            if conn_src:
+                conn_src.close()
+            if conn_backup:
+                conn_backup.close()
+
         # Save and process uploaded file
         import tempfile
         with tempfile.NamedTemporaryFile(delete=False, suffix=expected_ext) as tmp:
             file.save(tmp.name)
             upload_path = tmp.name
-        
+
         # Import data
-        conn_upload = sqlite3.connect(upload_path)
-        conn_main = sqlite3.connect(scheduler.DB_PATH)
-        cursor_main = conn_main.cursor()
-        cursor_upload = conn_upload.cursor()
-        
-        if import_type == 'schedules':
-            # Clear and import schedules
-            cursor_main.execute("DELETE FROM scheduled_jobs")
+        conn_upload = None
+        conn_main = None
+        try:
+            conn_upload = sqlite3.connect(upload_path)
+            conn_main = sqlite3.connect(scheduler.DB_PATH)
+            cursor_main = conn_main.cursor()
+            cursor_upload = conn_upload.cursor()
 
-            # Copy scheduled_jobs
-            cursor_upload.execute("SELECT * FROM scheduled_jobs")
-            for row in cursor_upload.fetchall():
-                placeholders = ','.join(['?' for _ in row])
-                cursor_main.execute(f"INSERT INTO scheduled_jobs VALUES ({placeholders})", row)
+            if import_type == 'schedules':
+                # Clear and import schedules
+                cursor_main.execute("DELETE FROM scheduled_jobs")
 
-            # Reload scheduler
-            conn_main.commit()
-            conn_upload.close()
-            conn_main.close()
+                # Copy scheduled_jobs
+                cursor_upload.execute("SELECT * FROM scheduled_jobs")
+                for row in cursor_upload.fetchall():
+                    placeholders = ','.join(['?' for _ in row])
+                    cursor_main.execute(f"INSERT INTO scheduled_jobs VALUES ({placeholders})", row)
 
-            scheduler.scheduler.remove_all_jobs()
-            scheduler.restore_jobs_on_startup()
-        
-        else:  # config
-            # Clear and import configuration
-            cursor_main.execute("DELETE FROM system_config")
-            
-            cursor_upload.execute("SELECT * FROM system_config")
-            for row in cursor_upload.fetchall():
-                placeholders = ','.join(['?' for _ in row])
-                cursor_main.execute(f"INSERT INTO system_config VALUES ({placeholders})", row)
-            
-            conn_main.commit()
-            conn_upload.close()
-            conn_main.close()
-        
+                # Reload scheduler
+                conn_main.commit()
+
+                scheduler.scheduler.remove_all_jobs()
+                scheduler.restore_jobs_on_startup()
+
+            else:  # config
+                # Clear and import configuration
+                cursor_main.execute("DELETE FROM system_config")
+
+                cursor_upload.execute("SELECT * FROM system_config")
+                for row in cursor_upload.fetchall():
+                    placeholders = ','.join(['?' for _ in row])
+                    cursor_main.execute(f"INSERT INTO system_config VALUES ({placeholders})", row)
+
+                conn_main.commit()
+        finally:
+            if conn_upload:
+                conn_upload.close()
+            if conn_main:
+                conn_main.close()
+
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -933,41 +1065,45 @@ def revert_data(revert_type):
         return jsonify({'error': 'No backup available'}), 404
     
     try:
-        conn_backup = sqlite3.connect(str(backup_path))
-        conn_main = sqlite3.connect(scheduler.DB_PATH)
-        cursor_main = conn_main.cursor()
-        cursor_backup = conn_backup.cursor()
-        
-        if revert_type == 'schedules':
-            # Clear and restore schedules
-            cursor_main.execute("DELETE FROM scheduled_jobs")
+        conn_backup = None
+        conn_main = None
+        try:
+            conn_backup = sqlite3.connect(str(backup_path))
+            conn_main = sqlite3.connect(scheduler.DB_PATH)
+            cursor_main = conn_main.cursor()
+            cursor_backup = conn_backup.cursor()
 
-            cursor_backup.execute("SELECT * FROM scheduled_jobs")
-            for row in cursor_backup.fetchall():
-                placeholders = ','.join(['?' for _ in row])
-                cursor_main.execute(f"INSERT INTO scheduled_jobs VALUES ({placeholders})", row)
+            if revert_type == 'schedules':
+                # Clear and restore schedules
+                cursor_main.execute("DELETE FROM scheduled_jobs")
 
-            conn_main.commit()
-            conn_backup.close()
-            conn_main.close()
+                cursor_backup.execute("SELECT * FROM scheduled_jobs")
+                for row in cursor_backup.fetchall():
+                    placeholders = ','.join(['?' for _ in row])
+                    cursor_main.execute(f"INSERT INTO scheduled_jobs VALUES ({placeholders})", row)
 
-            # Reload scheduler
-            scheduler.scheduler.remove_all_jobs()
-            scheduler.restore_jobs_on_startup()
-        
-        else:  # config
-            # Clear and restore configuration
-            cursor_main.execute("DELETE FROM system_config")
-            
-            cursor_backup.execute("SELECT * FROM system_config")
-            for row in cursor_backup.fetchall():
-                placeholders = ','.join(['?' for _ in row])
-                cursor_main.execute(f"INSERT INTO system_config VALUES ({placeholders})", row)
-            
-            conn_main.commit()
-            conn_backup.close()
-            conn_main.close()
-        
+                conn_main.commit()
+
+                # Reload scheduler
+                scheduler.scheduler.remove_all_jobs()
+                scheduler.restore_jobs_on_startup()
+
+            else:  # config
+                # Clear and restore configuration
+                cursor_main.execute("DELETE FROM system_config")
+
+                cursor_backup.execute("SELECT * FROM system_config")
+                for row in cursor_backup.fetchall():
+                    placeholders = ','.join(['?' for _ in row])
+                    cursor_main.execute(f"INSERT INTO system_config VALUES ({placeholders})", row)
+
+                conn_main.commit()
+        finally:
+            if conn_backup:
+                conn_backup.close()
+            if conn_main:
+                conn_main.close()
+
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1069,6 +1205,22 @@ def get_disk_space():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/system/time', methods=['GET'])
+@login_required
+def get_server_time():
+    """
+    Get current server time in ISO format.
+    Used by frontend to sync time calculations and avoid client clock drift issues.
+
+    Returns:
+        - server_time: Current server time in ISO format
+    """
+    return jsonify({
+        'success': True,
+        'server_time': datetime.now().isoformat()
+    })
 
 
 # ============================================================================
@@ -1177,7 +1329,23 @@ def get_video_status():
 def start_video_recording():
     """Start video recording from RTSP stream"""
     data = request.json or {}
-    duration = data.get('duration')  # None for indefinite
+
+    # Validate input parameters
+    schema = {
+        'duration': {
+            'type': 'duration',
+            'required': False,
+            'default': None,
+            'allow_none': True,  # None means indefinite recording
+            'allow_override': False
+        }
+    }
+
+    valid, error_msg, validated = validation.validate_request_data(data, schema)
+    if not valid:
+        return jsonify({'error': error_msg}), 400
+
+    duration = validated['duration']
 
     if video_recorder.is_video_recording():
         return jsonify({'error': 'Video recording already in progress'}), 400

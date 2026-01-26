@@ -19,6 +19,7 @@ import requests
 
 # Import scheduler for config storage (reuses existing system_config table)
 import scheduler
+import validation
 
 # Configuration constants
 DEFAULT_VIDEO_BITRATE = '4M'  # For hardware transcoding
@@ -338,8 +339,20 @@ def start_video_recording(duration_seconds=None):
 
     Raises:
         RuntimeError: If recording fails to start
+        ValueError: If duration validation fails
     """
     global video_process, current_video_file, video_start_time
+
+    # Validate duration parameter
+    valid, error_msg, validated_duration = validation.validate_duration(
+        duration_seconds,
+        allow_none=True,  # None means indefinite recording
+        allow_override=False
+    )
+    if not valid:
+        raise ValueError(error_msg)
+
+    duration_seconds = validated_duration
 
     config = get_camera_config()
 

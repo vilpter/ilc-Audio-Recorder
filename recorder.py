@@ -16,6 +16,7 @@ from datetime import datetime
 import threading
 import time
 import scheduler
+import db_utils
 
 # Log file paths (exported for Settings page)
 LOG_DIR = Path.home() / '.audio-recorder'
@@ -139,22 +140,18 @@ def load_channel_suffixes():
     try:
         from pathlib import Path as PPath
         db_path = PPath.home() / '.audio-recorder' / 'schedule.db'
-        
+
         if not db_path.exists():
             return 'L', 'R'  # Defaults if DB doesn't exist yet
-        
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT value FROM system_config WHERE key = 'channel_left_suffix'")
-        left_row = cursor.fetchone()
+
+        left_row = db_utils.fetch_one(db_path,
+            "SELECT value FROM system_config WHERE key = 'channel_left_suffix'")
         left_suffix = left_row[0] if left_row else 'L'
-        
-        cursor.execute("SELECT value FROM system_config WHERE key = 'channel_right_suffix'")
-        right_row = cursor.fetchone()
+
+        right_row = db_utils.fetch_one(db_path,
+            "SELECT value FROM system_config WHERE key = 'channel_right_suffix'")
         right_suffix = right_row[0] if right_row else 'R'
-        
-        conn.close()
+
         return left_suffix, right_suffix
     except:
         return 'L', 'R'  # Fallback to defaults on any error

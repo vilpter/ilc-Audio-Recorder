@@ -96,15 +96,27 @@
             <div class="mt-6 flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm">
                 <div class="flex items-center">
                     <div class="w-3 h-3 sm:w-4 sm:h-4 bg-blue-200 border border-blue-400 rounded mr-1 sm:mr-2"></div>
-                    <span>One-time</span>
+                    <span>Future</span>
                 </div>
                 <div class="flex items-center">
-                    <div class="w-3 h-3 sm:w-4 sm:h-4 bg-purple-200 border border-purple-400 rounded mr-1 sm:mr-2"></div>
-                    <span>Recurring</span>
+                    <div class="w-3 h-3 sm:w-4 sm:h-4 bg-orange-200 border border-orange-400 rounded mr-1 sm:mr-2"></div>
+                    <span>Recording Now</span>
                 </div>
                 <div class="flex items-center">
                     <div class="w-3 h-3 sm:w-4 sm:h-4 bg-green-200 border border-green-400 rounded mr-1 sm:mr-2"></div>
                     <span>Completed</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-3 h-3 sm:w-4 sm:h-4 bg-yellow-200 border border-yellow-400 rounded mr-1 sm:mr-2"></div>
+                    <span>Missed</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-3 h-3 sm:w-4 sm:h-4 bg-red-200 border border-red-400 rounded mr-1 sm:mr-2"></div>
+                    <span>Failed</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-3 h-3 sm:w-4 sm:h-4 bg-purple-200 border border-purple-400 rounded mr-1 sm:mr-2"></div>
+                    <span>Recurring</span>
                 </div>
             </div>
         </div>
@@ -240,23 +252,53 @@
     </div>
 
     <script>
+        // Server time offset (to avoid client clock sync issues)
+        let serverTimeOffset = 0;
+
+        // Get current time using server time offset
+        function getCurrentTime() {
+            return new Date(Date.now() + serverTimeOffset);
+        }
+
+        // Fetch server time and calculate offset
+        async function syncServerTime() {
+            try {
+                const clientBefore = Date.now();
+                const response = await fetch('/api/system/time');
+                const clientAfter = Date.now();
+                const data = await response.json();
+
+                if (data.server_time) {
+                    const serverTime = new Date(data.server_time).getTime();
+                    const clientTime = (clientBefore + clientAfter) / 2; // Account for network latency
+                    serverTimeOffset = serverTime - clientTime;
+                }
+            } catch (error) {
+                console.error('Error syncing server time:', error);
+            }
+        }
+
         // Update current date/time display
         function updateDateTime() {
-            const now = new Date();
-            const options = { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
+            const now = getCurrentTime();
+            const options = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit',
                 hour12: false
             };
-            document.getElementById('current-datetime').textContent = 
+            document.getElementById('current-datetime').textContent =
                 now.toLocaleString('en-US', options);
         }
-        
+
+        // Sync server time on load and every 5 minutes
+        syncServerTime();
+        setInterval(syncServerTime, 300000);
+
         // Update immediately and then every second
         updateDateTime();
         setInterval(updateDateTime, 1000);
@@ -372,9 +414,30 @@
                     html += `<div class="text-xs sm:text-sm font-semibold ${isToday ? 'text-yellow-900' : 'text-gray-700'}">${currentDay.getDate()}</div>`;
 
                     eventsOnDay.forEach(event => {
-                        const bgColor = event.is_recurring ? 'bg-purple-200 border-purple-400' :
-                                       event.status === 'completed' ? 'bg-green-200 border-green-400' :
-                                       'bg-blue-200 border-blue-400';
+                        // Calculate time-based color
+                        const now = getCurrentTime();
+                        const startTime = new Date(event.start_time);
+                        const endTime = new Date(startTime.getTime() + event.duration * 1000);
+
+                        let bgColor;
+                        if (event.is_recurring) {
+                            bgColor = 'bg-purple-200 border-purple-400';
+                        } else if (now < startTime) {
+                            // Future recording
+                            bgColor = 'bg-blue-200 border-blue-400';
+                        } else if (now >= endTime) {
+                            // Recording time passed - check notes for success/failure
+                            if (event.notes && (event.notes.includes('Last executed:') || event.notes.includes('Recording completed'))) {
+                                bgColor = 'bg-green-200 border-green-400'; // Completed successfully
+                            } else if (event.notes && (event.notes.includes('failed') || event.notes.includes('error'))) {
+                                bgColor = 'bg-red-200 border-red-400'; // Failed
+                            } else {
+                                bgColor = 'bg-yellow-200 border-yellow-400'; // Missed or unknown
+                            }
+                        } else {
+                            // Currently in recording window
+                            bgColor = 'bg-orange-200 border-orange-400';
+                        }
 
                         const typeIndicator = event.capture_video ? 'A&V' : 'A';
                         html += `<div class="${bgColor} border rounded px-1 sm:px-2 py-0.5 sm:py-1 mb-1 text-xs cursor-pointer hover:opacity-80"
@@ -439,13 +502,81 @@
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         }
 
-        function showEventDetails(event) {
+        async function showEventDetails(event) {
             const detailsDiv = document.getElementById('event-details');
             const headingEl = document.getElementById('event-details-heading');
             const infoDiv = document.getElementById('event-info');
 
             headingEl.textContent = event.name;
-            
+
+            // Calculate time-based status
+            const now = getCurrentTime();
+            const startTime = new Date(event.start_time);
+            const endTime = new Date(startTime.getTime() + event.duration * 1000);
+
+            let statusText = '';
+            let statusClass = '';
+            let statusDetails = '';
+            let isFutureRecording = false;
+
+            if (now < startTime) {
+                // Future recording
+                statusText = 'FUTURE RECORDING';
+                statusClass = 'text-blue-600';
+                isFutureRecording = true;
+                const timeUntil = Math.floor((startTime - now) / 1000 / 60);
+                if (timeUntil < 60) {
+                    statusDetails = `Starts in ${timeUntil} minutes`;
+                } else if (timeUntil < 1440) {
+                    statusDetails = `Starts in ${Math.floor(timeUntil / 60)} hours`;
+                } else {
+                    statusDetails = `Starts in ${Math.floor(timeUntil / 1440)} days`;
+                }
+            } else if (now >= startTime && now < endTime) {
+                // Should be recording now - verify with /api/status
+                statusText = 'CURRENTLY RECORDING';
+                statusClass = 'text-orange-600 animate-pulse';
+
+                // Cross-reference with /api/status
+                try {
+                    const statusResponse = await fetch('/api/status');
+                    const statusData = await statusResponse.json();
+
+                    if (!statusData.recording) {
+                        statusText = 'RECORDING WINDOW ACTIVE (but not recording)';
+                        statusClass = 'text-yellow-600';
+                        statusDetails = 'Warning: Should be recording but /api/status shows no active recording';
+                    } else {
+                        const timeRemaining = Math.floor((endTime - now) / 1000 / 60);
+                        statusDetails = `${timeRemaining} minutes remaining`;
+                    }
+                } catch (error) {
+                    console.error('Error checking recording status:', error);
+                    statusDetails = 'Unable to verify recording status';
+                }
+            } else {
+                // Recording time passed
+                statusText = 'RECORDING TIME PASSED';
+                statusClass = 'text-gray-600';
+
+                // Check notes for execution information
+                if (event.notes) {
+                    if (event.notes.includes('Last executed:') || event.notes.includes('Recording completed')) {
+                        statusClass = 'text-green-600';
+                        statusDetails = 'Recording completed';
+                    } else if (event.notes.includes('failed') || event.notes.includes('error')) {
+                        statusClass = 'text-red-600';
+                        statusDetails = 'Recording failed - see notes';
+                    } else {
+                        statusClass = 'text-yellow-600';
+                        statusDetails = 'Status unknown - check notes';
+                    }
+                } else {
+                    statusClass = 'text-red-600';
+                    statusDetails = 'No execution record found - recording may have been missed';
+                }
+            }
+
             let recurrenceInfo = '';
             if (event.is_recurring && event.recurrence_pattern) {
                 try {
@@ -463,21 +594,19 @@
                     recurrenceInfo = 'Recurring schedule';
                 }
             }
-            
+
             const recordingType = event.capture_video ? 'Audio & Video' : 'Audio only';
             infoDiv.innerHTML = `
                 <div class="space-y-2">
                     <div><strong>Time:</strong> ${formatTimeRangeFull(event.start_time, event.duration)}</div>
                     <div><strong>Duration:</strong> ${event.duration / 60} minutes</div>
                     <div><strong>Type:</strong> ${recordingType}</div>
-                    <div><strong>Status:</strong> <span class="font-semibold ${
-                        event.status === 'pending' ? 'text-blue-600' :
-                        event.status === 'completed' ? 'text-green-600' :
-                        'text-gray-600'
-                    }">${event.status.toUpperCase()}</span></div>
+                    <div><strong>Status:</strong> <span class="font-semibold ${statusClass}">${statusText}</span>
+                        ${statusDetails ? `<br><span class="text-sm text-gray-600">${statusDetails}</span>` : ''}
+                    </div>
                     ${recurrenceInfo ? `<div><strong>Recurrence:</strong> ${recurrenceInfo}</div>` : ''}
                     ${event.notes ? `<div><strong>Notes:</strong> ${event.notes}</div>` : ''}
-                    ${event.status === 'pending' ? `
+                    ${isFutureRecording ? `
                         <div class="mt-4 flex space-x-2">
                             <button onclick='openEditModal(${JSON.stringify(event).replace(/'/g, "&#39;")})' class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
                                 Edit
@@ -489,7 +618,7 @@
                     ` : ''}
                 </div>
             `;
-            
+
             detailsDiv.classList.remove('hidden');
             detailsDiv.scrollIntoView({ behavior: 'smooth' });
         }
@@ -742,6 +871,9 @@
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(renderCalendar, 250);
         });
+
+        // Auto-refresh calendar every 60 seconds to update time-based colors
+        setInterval(renderCalendar, 60000);
     </script>
 </body>
 </html>

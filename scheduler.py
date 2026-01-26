@@ -17,6 +17,8 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.cron import CronTrigger
 import recorder
 import atexit
+import db_utils
+import validation
 
 # Log file path
 LOG_DIR = Path.home() / '.audio-recorder'
@@ -86,78 +88,75 @@ atexit.register(lambda: scheduler.shutdown())
 
 def init_database():
     """Initialize SQLite database for schedule storage"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS scheduled_jobs (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            start_time TEXT NOT NULL,
-            duration INTEGER NOT NULL,
-            created_at TEXT NOT NULL,
-            status TEXT DEFAULT 'pending',
-            completed_at TEXT,
-            notes TEXT,
-            is_recurring INTEGER DEFAULT 0,
-            recurrence_pattern TEXT,
-            parent_template_id TEXT,
-            allow_override INTEGER DEFAULT 0,
-            capture_video INTEGER DEFAULT 0
-        )
-    ''')
-
-    # Add capture_video column if it doesn't exist (for upgrades)
-    try:
-        cursor.execute('ALTER TABLE scheduled_jobs ADD COLUMN capture_video INTEGER DEFAULT 0')
-    except sqlite3.OperationalError:
-        pass  # Column already exists
-    
-    # System configuration table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS system_config (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        )
-    ''')
-    
-    # Set default audio device to auto-detect
-    cursor.execute('''
-        INSERT OR IGNORE INTO system_config (key, value, updated_at) 
-        VALUES ('audio_device', 'auto', datetime('now'))
-    ''')
-    
-    # Set default channel suffixes
-    cursor.execute('''
-        INSERT OR IGNORE INTO system_config (key, value, updated_at) 
-        VALUES ('channel_left_suffix', 'L', datetime('now'))
-    ''')
-    
-    cursor.execute('''
-        INSERT OR IGNORE INTO system_config (key, value, updated_at)
-        VALUES ('channel_right_suffix', 'R', datetime('now'))
-    ''')
-
-    # Migrate usb_storage_path to unified storage_path
-    cursor.execute("SELECT value FROM system_config WHERE key = 'usb_storage_path'")
-    existing_usb = cursor.fetchone()
-
-    if existing_usb:
-        # Migrate existing value from usb_storage_path to storage_path
+    def _init_transaction(conn, cursor):
         cursor.execute('''
-            INSERT OR IGNORE INTO system_config (key, value, updated_at)
-            VALUES ('storage_path', ?, datetime('now'))
-        ''', (existing_usb[0],))
-    else:
-        # Set default storage path
-        cursor.execute('''
-            INSERT OR IGNORE INTO system_config (key, value, updated_at)
-            VALUES ('storage_path', '/mnt/usb_recorder', datetime('now'))
+            CREATE TABLE IF NOT EXISTS scheduled_jobs (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                duration INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                completed_at TEXT,
+                notes TEXT,
+                is_recurring INTEGER DEFAULT 0,
+                recurrence_pattern TEXT,
+                parent_template_id TEXT,
+                allow_override INTEGER DEFAULT 0,
+                capture_video INTEGER DEFAULT 0
+            )
         ''')
 
-    conn.commit()
-    conn.close()
+        # Add capture_video column if it doesn't exist (for upgrades)
+        try:
+            cursor.execute('ALTER TABLE scheduled_jobs ADD COLUMN capture_video INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # System configuration table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS system_config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        ''')
+
+        # Set default audio device to auto-detect
+        cursor.execute('''
+            INSERT OR IGNORE INTO system_config (key, value, updated_at)
+            VALUES ('audio_device', 'auto', datetime('now'))
+        ''')
+
+        # Set default channel suffixes
+        cursor.execute('''
+            INSERT OR IGNORE INTO system_config (key, value, updated_at)
+            VALUES ('channel_left_suffix', 'L', datetime('now'))
+        ''')
+
+        cursor.execute('''
+            INSERT OR IGNORE INTO system_config (key, value, updated_at)
+            VALUES ('channel_right_suffix', 'R', datetime('now'))
+        ''')
+
+        # Migrate usb_storage_path to unified storage_path
+        cursor.execute("SELECT value FROM system_config WHERE key = 'usb_storage_path'")
+        existing_usb = cursor.fetchone()
+
+        if existing_usb:
+            # Migrate existing value from usb_storage_path to storage_path
+            cursor.execute('''
+                INSERT OR IGNORE INTO system_config (key, value, updated_at)
+                VALUES ('storage_path', ?, datetime('now'))
+            ''', (existing_usb[0],))
+        else:
+            # Set default storage path
+            cursor.execute('''
+                INSERT OR IGNORE INTO system_config (key, value, updated_at)
+                VALUES ('storage_path', '/mnt/usb_recorder', datetime('now'))
+            ''')
+
+    db_utils.execute_transaction(DB_PATH, _init_transaction)
 
 
 def create_job(start_time, duration, name='Unnamed Recording', notes='',
@@ -179,26 +178,54 @@ def create_job(start_time, duration, name='Unnamed Recording', notes='',
 
     Returns:
         Job ID
+
+    Raises:
+        ValueError: If validation fails
     """
+    # Validate inputs
+    valid, error_msg, validated_duration = validation.validate_duration(
+        duration, allow_none=False, allow_override=allow_override
+    )
+    if not valid:
+        raise ValueError(f"Invalid duration: {error_msg}")
+
+    valid, error_msg, validated_time = validation.validate_iso_datetime(start_time, "start_time")
+    if not valid:
+        raise ValueError(error_msg)
+
+    valid, error_msg, validated_name = validation.validate_string(
+        name, "name", min_length=1, max_length=255, allow_empty=False
+    )
+    if not valid:
+        raise ValueError(error_msg)
+
+    if notes:
+        valid, error_msg, validated_notes = validation.validate_string(
+            notes, "notes", max_length=1000, allow_empty=True
+        )
+        if not valid:
+            raise ValueError(error_msg)
+    else:
+        validated_notes = notes
+
     # Parse start time
     dt = datetime.fromisoformat(start_time)
     job_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    # Store in database
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    # Use validated values
+    duration = validated_duration
+    name = validated_name
+    notes = validated_notes
 
-    cursor.execute('''
+    # Store in database
+    db_utils.execute_query(DB_PATH, '''
         INSERT INTO scheduled_jobs
         (id, name, start_time, duration, created_at, notes, is_recurring,
          recurrence_pattern, parent_template_id, allow_override, capture_video)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (job_id, name, start_time, duration, datetime.now().isoformat(),
           notes, 1 if is_recurring else 0, recurrence_pattern, template_id,
-          1 if allow_override else 0, 1 if capture_video else 0))
-
-    conn.commit()
-    conn.close()
+          1 if allow_override else 0, 1 if capture_video else 0), commit=True)
 
     # Schedule with APScheduler
     if is_recurring and recurrence_pattern:
@@ -270,11 +297,9 @@ def delete_job(job_id):
         pass  # Job may have already completed
 
     # Remove from database
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM scheduled_jobs WHERE id = ?', (job_id,))
-    conn.commit()
-    conn.close()
+    db_utils.execute_query(DB_PATH,
+        'DELETE FROM scheduled_jobs WHERE id = ?',
+        (job_id,), commit=True)
 
 
 def update_job(job_id, start_time=None, duration=None, name=None, notes=None,
@@ -296,19 +321,51 @@ def update_job(job_id, start_time=None, duration=None, name=None, notes=None,
 
     Returns:
         True if successful
-    """
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
 
+    Raises:
+        ValueError: If validation fails or job not found
+    """
     # Get current job data
-    cursor.execute('SELECT * FROM scheduled_jobs WHERE id = ?', (job_id,))
-    row = cursor.fetchone()
+    row = db_utils.fetch_one(DB_PATH,
+        'SELECT * FROM scheduled_jobs WHERE id = ?',
+        (job_id,), row_factory=sqlite3.Row)
+
     if not row:
-        conn.close()
         raise ValueError(f"Job {job_id} not found")
 
     current = dict(row)
+
+    # Validate inputs if provided
+    if duration is not None:
+        # Use allow_override from parameters if provided, otherwise from current job
+        override = allow_override if allow_override is not None else bool(current['allow_override'])
+        valid, error_msg, validated_duration = validation.validate_duration(
+            duration, allow_none=False, allow_override=override
+        )
+        if not valid:
+            raise ValueError(f"Invalid duration: {error_msg}")
+        duration = validated_duration
+
+    if start_time is not None:
+        valid, error_msg, _ = validation.validate_iso_datetime(start_time, "start_time")
+        if not valid:
+            raise ValueError(error_msg)
+
+    if name is not None:
+        valid, error_msg, validated_name = validation.validate_string(
+            name, "name", min_length=1, max_length=255, allow_empty=False
+        )
+        if not valid:
+            raise ValueError(error_msg)
+        name = validated_name
+
+    if notes is not None and notes != '':
+        valid, error_msg, validated_notes = validation.validate_string(
+            notes, "notes", max_length=1000, allow_empty=True
+        )
+        if not valid:
+            raise ValueError(error_msg)
+        notes = validated_notes
 
     # Update only provided fields
     new_start_time = start_time if start_time is not None else current['start_time']
@@ -321,17 +378,14 @@ def update_job(job_id, start_time=None, duration=None, name=None, notes=None,
     new_capture_video = capture_video if capture_video is not None else bool(current['capture_video'])
 
     # Update database
-    cursor.execute('''
+    db_utils.execute_query(DB_PATH, '''
         UPDATE scheduled_jobs
         SET start_time = ?, duration = ?, name = ?, notes = ?,
             is_recurring = ?, recurrence_pattern = ?, allow_override = ?, capture_video = ?
         WHERE id = ?
     ''', (new_start_time, new_duration, new_name, new_notes,
           1 if new_is_recurring else 0, new_recurrence_pattern,
-          1 if new_allow_override else 0, 1 if new_capture_video else 0, job_id))
-
-    conn.commit()
-    conn.close()
+          1 if new_allow_override else 0, 1 if new_capture_video else 0, job_id), commit=True)
 
     # Remove old scheduler job
     try:
@@ -362,41 +416,27 @@ def update_job(job_id, start_time=None, duration=None, name=None, notes=None,
 def get_all_jobs():
     """
     Retrieve all scheduled jobs
-    
+
     Returns:
         List of job dictionaries
     """
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT * FROM scheduled_jobs 
+    rows = db_utils.fetch_all(DB_PATH, '''
+        SELECT * FROM scheduled_jobs
         ORDER BY start_time DESC
-    ''')
-    
-    jobs = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    
-    return jobs
+    ''', row_factory=sqlite3.Row)
+
+    return [dict(row) for row in rows]
 
 
 def get_pending_jobs():
     """Get only pending (not yet executed) jobs"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT * FROM scheduled_jobs 
+    rows = db_utils.fetch_all(DB_PATH, '''
+        SELECT * FROM scheduled_jobs
         WHERE status = 'pending' AND start_time > ?
         ORDER BY start_time
-    ''', (datetime.now().isoformat(),))
-    
-    jobs = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    
-    return jobs
+    ''', (datetime.now().isoformat(),), row_factory=sqlite3.Row)
+
+    return [dict(row) for row in rows]
 
 
 def _execute_scheduled_recording(job_id, duration, allow_override=False, capture_video=False):
@@ -439,38 +479,64 @@ def _execute_scheduled_recording(job_id, duration, allow_override=False, capture
                 logger.error(traceback.format_exc())
                 # Audio continues even if video fails
 
-        # Update database status
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
+        # Check if this is a recurring job
+        job_info = db_utils.fetch_one(DB_PATH,
+            'SELECT is_recurring FROM scheduled_jobs WHERE id = ?',
+            (job_id,))
+        is_recurring = bool(job_info[0]) if job_info else False
 
+        # Update database status
         status_note = ""
         if capture_video and video_error:
             status_note = f"Audio OK, Video failed: {video_error}"
 
-        cursor.execute('''
-            UPDATE scheduled_jobs
-            SET status = 'completed', completed_at = ?, notes = COALESCE(notes || ' ', '') || ?
-            WHERE id = ?
-        ''', (datetime.now().isoformat(), status_note, job_id))
-        conn.commit()
-        conn.close()
-
-        logger.info(f"Job {job_id} completed successfully")
+        # Only mark one-time jobs as completed - recurring jobs stay pending
+        if not is_recurring:
+            db_utils.execute_query(DB_PATH, '''
+                UPDATE scheduled_jobs
+                SET status = 'completed', completed_at = ?, notes = COALESCE(notes || ' ', '') || ?
+                WHERE id = ?
+            ''', (datetime.now().isoformat(), status_note, job_id), commit=True)
+            logger.info(f"Job {job_id} marked as completed (one-time job)")
+        else:
+            # For recurring jobs, add execution note but keep status as 'pending'
+            execution_note = f"Last executed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            if status_note:
+                execution_note += f" ({status_note})"
+            db_utils.execute_query(DB_PATH, '''
+                UPDATE scheduled_jobs
+                SET notes = ?
+                WHERE id = ?
+            ''', (execution_note, job_id), commit=True)
+            logger.info(f"Job {job_id} executed successfully (recurring job - status remains pending)")
 
     except Exception as e:
         logger.error(f"Job {job_id} FAILED: {e}")
         logger.error(f"Full traceback:\n{traceback.format_exc()}")
 
-        # Update database with error status
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE scheduled_jobs
-            SET status = 'failed', completed_at = ?, notes = ?
-            WHERE id = ?
-        ''', (datetime.now().isoformat(), str(e), job_id))
-        conn.commit()
-        conn.close()
+        # Check if this is a recurring job
+        job_info = db_utils.fetch_one(DB_PATH,
+            'SELECT is_recurring FROM scheduled_jobs WHERE id = ?',
+            (job_id,))
+        is_recurring = bool(job_info[0]) if job_info else False
+
+        # Only mark one-time jobs as failed - recurring jobs stay pending
+        if not is_recurring:
+            db_utils.execute_query(DB_PATH, '''
+                UPDATE scheduled_jobs
+                SET status = 'failed', completed_at = ?, notes = ?
+                WHERE id = ?
+            ''', (datetime.now().isoformat(), str(e), job_id), commit=True)
+            logger.info(f"Job {job_id} marked as failed (one-time job)")
+        else:
+            # For recurring jobs, add error note but keep status as 'pending'
+            error_note = f"Last execution failed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {str(e)}"
+            db_utils.execute_query(DB_PATH, '''
+                UPDATE scheduled_jobs
+                SET notes = ?
+                WHERE id = ?
+            ''', (error_note, job_id), commit=True)
+            logger.info(f"Job {job_id} execution failed (recurring job - status remains pending)")
 
 
 def restore_jobs_on_startup():
@@ -511,38 +577,28 @@ def restore_jobs_on_startup():
             print(f"Restored scheduled job: {job['id']} at {start_time}")
         else:
             # Mark one-time jobs as missed if past due
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute('''
+            db_utils.execute_query(DB_PATH, '''
                 UPDATE scheduled_jobs
                 SET status = 'missed'
                 WHERE id = ?
-            ''', (job['id'],))
-            conn.commit()
-            conn.close()
+            ''', (job['id'],), commit=True)
             print(f"Marked job as missed: {job['id']}")
 
 
 def get_system_config(key, default=None):
     """Get system configuration value"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT value FROM system_config WHERE key = ?', (key,))
-    row = cursor.fetchone()
-    conn.close()
+    row = db_utils.fetch_one(DB_PATH,
+        'SELECT value FROM system_config WHERE key = ?',
+        (key,))
     return row[0] if row else default
 
 
 def set_system_config(key, value):
     """Set system configuration value"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
+    db_utils.execute_query(DB_PATH, '''
         INSERT OR REPLACE INTO system_config (key, value, updated_at)
         VALUES (?, ?, datetime('now'))
-    ''', (key, value))
-    conn.commit()
-    conn.close()
+    ''', (key, value), commit=True)
 
 
 # Initialize database on module import
