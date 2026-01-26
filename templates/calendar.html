@@ -146,8 +146,12 @@
                         
                         <div>
                             <label class="block text-gray-700 mb-2">Date *</label>
-                            <input type="date" id="modal-date"
-                                class="w-full border border-gray-300 rounded px-3 py-2">
+                            <div class="relative">
+                                <input type="date" id="modal-date"
+                                    class="w-full border border-gray-300 rounded px-3 py-2"
+                                    onchange="updateDayOfWeek()">
+                                <div id="day-of-week-display" class="text-sm text-gray-600 mt-1"></div>
+                            </div>
                         </div>
                         
                         <div>
@@ -187,8 +191,8 @@
                             </div>
                             
                             <div id="modal-weekly-options">
-                                <label class="block text-sm text-gray-600 mb-1">Repeat on:</label>
-                                <div class="flex flex-wrap gap-2">
+                                <div class="hidden">
+                                    <!-- Hidden checkboxes - automatically set based on selected date -->
                                     <label class="flex items-center">
                                         <input type="checkbox" value="0" class="modal-weekday mr-1"> Mon
                                     </label>
@@ -211,12 +215,20 @@
                                         <input type="checkbox" value="6" class="modal-weekday mr-1"> Sun
                                     </label>
                                 </div>
+                                <p class="text-sm text-gray-600 italic">
+                                    <span id="weekly-day-display" class="font-medium"></span> will be automatically selected based on the date you chose above.
+                                </p>
                             </div>
                             
                             <div id="modal-monthly-options" class="hidden">
-                                <label class="block text-sm text-gray-600 mb-1">Day of month:</label>
-                                <input type="number" id="modal-month-day" value="1" min="1" max="31"
-                                    class="border rounded px-3 py-2 w-24">
+                                <div class="hidden">
+                                    <!-- Hidden input - automatically set based on selected date -->
+                                    <input type="number" id="modal-month-day" value="1" min="1" max="31"
+                                        class="border rounded px-3 py-2 w-24">
+                                </div>
+                                <p class="text-sm text-gray-600 italic">
+                                    Day <span id="monthly-day-display" class="font-medium"></span> of each month will be automatically selected based on the date you chose above.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -357,6 +369,7 @@
 
         let currentDate = new Date();
         let allJobs = {{ jobs | tojson | safe }};
+        let allInstances = {{ instances | tojson | safe }};
 
         // Format time range for calendar cells (compact: "10:00 AM - 11:30 AM")
         function formatTimeRangeShort(startTimeStr, durationSeconds) {
@@ -416,11 +429,42 @@
                     eventsOnDay.forEach(event => {
                         // Calculate time-based color
                         const now = getCurrentTime();
-                        const startTime = new Date(event.start_time);
+                        const dayStr = currentDay.toISOString().split('T')[0];
+
+                        // For recurring jobs, check if there's an instance for this specific date
+                        let instance = null;
+                        if (event.is_recurring) {
+                            instance = allInstances.find(i =>
+                                i.parent_job_id === event.id &&
+                                i.occurrence_date === dayStr
+                            );
+                        }
+
+                        // Calculate occurrence-specific times
+                        const jobStartTime = new Date(event.start_time);
+                        const startTime = event.is_recurring
+                            ? new Date(currentDay.getFullYear(), currentDay.getMonth(), currentDay.getDate(),
+                                      jobStartTime.getHours(), jobStartTime.getMinutes(), jobStartTime.getSeconds())
+                            : new Date(event.start_time);
                         const endTime = new Date(startTime.getTime() + event.duration * 1000);
 
                         let bgColor;
-                        if (event.is_recurring) {
+                        if (event.is_recurring && instance) {
+                            // Use instance status for color
+                            if (instance.status === 'completed') {
+                                bgColor = 'bg-green-200 border-green-400';
+                            } else if (instance.status === 'failed') {
+                                bgColor = 'bg-red-200 border-red-400';
+                            } else if (instance.status === 'missed') {
+                                bgColor = 'bg-yellow-200 border-yellow-400';
+                            } else {
+                                bgColor = 'bg-purple-200 border-purple-400';
+                            }
+                        } else if (event.is_recurring && !instance && endTime < now) {
+                            // Past recurring occurrence with no instance - likely missed
+                            bgColor = 'bg-yellow-200 border-yellow-400';
+                        } else if (event.is_recurring) {
+                            // Future recurring occurrence
                             bgColor = 'bg-purple-200 border-purple-400';
                         } else if (now < startTime) {
                             // Future recording
@@ -440,8 +484,9 @@
                         }
 
                         const typeIndicator = event.capture_video ? 'A&V' : 'A';
+                        const currentDayStr = currentDay.toISOString();
                         html += `<div class="${bgColor} border rounded px-1 sm:px-2 py-0.5 sm:py-1 mb-1 text-xs cursor-pointer hover:opacity-80"
-                                     onclick='event.stopPropagation(); showEventDetails(${JSON.stringify(event)})'>`;
+                                     onclick='event.stopPropagation(); showEventDetails(${JSON.stringify(event)}, "${currentDayStr}")'>`;
                         html += `<div class="font-semibold truncate">${event.name} <span class="opacity-60">[${typeIndicator}]</span></div>`;
                         html += `<div class="hidden sm:block">${formatTimeRangeShort(event.start_time, event.duration)}</div>`;
                         html += `</div>`;
@@ -471,9 +516,22 @@
         }
 
         function getEventsForDay(day) {
+            const dayStr = day.toISOString().split('T')[0];
+            const now = getCurrentTime();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
             return allJobs.filter(job => {
                 if (job.is_recurring) {
-                    // For recurring jobs, check if this day matches the pattern
+                    // For past dates, check if an instance exists
+                    if (day < today) {
+                        const instance = allInstances.find(i =>
+                            i.parent_job_id === job.id &&
+                            i.occurrence_date === dayStr
+                        );
+                        return !!instance;  // Only show if instance exists
+                    }
+
+                    // For future dates (and today), use pattern matching
                     if (job.recurrence_pattern) {
                         try {
                             const pattern = JSON.parse(job.recurrence_pattern);
@@ -502,78 +560,144 @@
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         }
 
-        async function showEventDetails(event) {
+        async function showEventDetails(event, clickedDateStr) {
             const detailsDiv = document.getElementById('event-details');
             const headingEl = document.getElementById('event-details-heading');
             const infoDiv = document.getElementById('event-info');
 
             headingEl.textContent = event.name;
 
-            // Calculate time-based status
-            const now = getCurrentTime();
-            const startTime = new Date(event.start_time);
+            // Parse the clicked date
+            const clickedDate = new Date(clickedDateStr);
+            const occurrenceDate = clickedDate.toISOString().split('T')[0];
+
+            // For recurring jobs, ensure instance exists and get instance data
+            let instance = null;
+            if (event.is_recurring) {
+                try {
+                    const response = await fetch(`/api/schedule/${event.id}/occurrence/${occurrenceDate}`);
+                    const data = await response.json();
+                    instance = data.instance;
+
+                    if (data.was_created) {
+                        console.log(`Instance was auto-created for ${event.id} on ${occurrenceDate}`);
+                        // Refresh instances data
+                        const indexResponse = await fetch('/');
+                        // Note: We can't easily re-parse the page, but the instance is now available
+                    }
+
+                    // Update allInstances if instance was created or found
+                    if (instance) {
+                        const existingIndex = allInstances.findIndex(i =>
+                            i.parent_job_id === event.id && i.occurrence_date === occurrenceDate
+                        );
+                        if (existingIndex >= 0) {
+                            allInstances[existingIndex] = instance;
+                        } else {
+                            allInstances.push(instance);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching/creating instance:', error);
+                }
+            }
+
+            // Calculate occurrence-specific times
+            const jobStartTime = new Date(event.start_time);
+            const startTime = event.is_recurring
+                ? new Date(clickedDate.getFullYear(), clickedDate.getMonth(), clickedDate.getDate(),
+                          jobStartTime.getHours(), jobStartTime.getMinutes(), jobStartTime.getSeconds())
+                : new Date(event.start_time);
             const endTime = new Date(startTime.getTime() + event.duration * 1000);
 
+            // Determine status and notes to display
+            const now = getCurrentTime();
             let statusText = '';
             let statusClass = '';
             let statusDetails = '';
             let isFutureRecording = false;
+            let notesToDisplay = '';
 
-            if (now < startTime) {
-                // Future recording
-                statusText = 'FUTURE RECORDING';
-                statusClass = 'text-blue-600';
-                isFutureRecording = true;
-                const timeUntil = Math.floor((startTime - now) / 1000 / 60);
-                if (timeUntil < 60) {
-                    statusDetails = `Starts in ${timeUntil} minutes`;
-                } else if (timeUntil < 1440) {
-                    statusDetails = `Starts in ${Math.floor(timeUntil / 60)} hours`;
+            if (instance) {
+                // Use instance-specific status and notes
+                notesToDisplay = instance.notes || '';
+
+                if (instance.status === 'completed') {
+                    statusText = 'RECORDING COMPLETED';
+                    statusClass = 'text-green-600';
+                    statusDetails = 'Recording was successful';
+                } else if (instance.status === 'failed') {
+                    statusText = 'RECORDING FAILED';
+                    statusClass = 'text-red-600';
+                    statusDetails = 'Recording encountered an error';
+                } else if (instance.status === 'missed') {
+                    statusText = 'RECORDING MISSED';
+                    statusClass = 'text-yellow-600';
+                    statusDetails = 'Recording did not execute';
                 } else {
-                    statusDetails = `Starts in ${Math.floor(timeUntil / 1440)} days`;
-                }
-            } else if (now >= startTime && now < endTime) {
-                // Should be recording now - verify with /api/status
-                statusText = 'CURRENTLY RECORDING';
-                statusClass = 'text-orange-600 animate-pulse';
-
-                // Cross-reference with /api/status
-                try {
-                    const statusResponse = await fetch('/api/status');
-                    const statusData = await statusResponse.json();
-
-                    if (!statusData.recording) {
-                        statusText = 'RECORDING WINDOW ACTIVE (but not recording)';
-                        statusClass = 'text-yellow-600';
-                        statusDetails = 'Warning: Should be recording but /api/status shows no active recording';
-                    } else {
-                        const timeRemaining = Math.floor((endTime - now) / 1000 / 60);
-                        statusDetails = `${timeRemaining} minutes remaining`;
-                    }
-                } catch (error) {
-                    console.error('Error checking recording status:', error);
-                    statusDetails = 'Unable to verify recording status';
+                    statusText = 'PENDING';
+                    statusClass = 'text-blue-600';
                 }
             } else {
-                // Recording time passed
-                statusText = 'RECORDING TIME PASSED';
-                statusClass = 'text-gray-600';
+                // No instance - calculate status from times
+                notesToDisplay = event.notes || '';
 
-                // Check notes for execution information
-                if (event.notes) {
-                    if (event.notes.includes('Last executed:') || event.notes.includes('Recording completed')) {
-                        statusClass = 'text-green-600';
-                        statusDetails = 'Recording completed';
-                    } else if (event.notes.includes('failed') || event.notes.includes('error')) {
-                        statusClass = 'text-red-600';
-                        statusDetails = 'Recording failed - see notes';
+                if (now < startTime) {
+                    // Future recording
+                    statusText = 'FUTURE RECORDING';
+                    statusClass = 'text-blue-600';
+                    isFutureRecording = true;
+                    const timeUntil = Math.floor((startTime - now) / 1000 / 60);
+                    if (timeUntil < 60) {
+                        statusDetails = `Starts in ${timeUntil} minutes`;
+                    } else if (timeUntil < 1440) {
+                        statusDetails = `Starts in ${Math.floor(timeUntil / 60)} hours`;
                     } else {
-                        statusClass = 'text-yellow-600';
-                        statusDetails = 'Status unknown - check notes';
+                        statusDetails = `Starts in ${Math.floor(timeUntil / 1440)} days`;
+                    }
+                } else if (now >= startTime && now < endTime) {
+                    // Should be recording now - verify with /api/status
+                    statusText = 'CURRENTLY RECORDING';
+                    statusClass = 'text-orange-600 animate-pulse';
+
+                    // Cross-reference with /api/status
+                    try {
+                        const statusResponse = await fetch('/api/status');
+                        const statusData = await statusResponse.json();
+
+                        if (!statusData.recording) {
+                            statusText = 'RECORDING WINDOW ACTIVE (but not recording)';
+                            statusClass = 'text-yellow-600';
+                            statusDetails = 'Warning: Should be recording but /api/status shows no active recording';
+                        } else {
+                            const timeRemaining = Math.floor((endTime - now) / 1000 / 60);
+                            statusDetails = `${timeRemaining} minutes remaining`;
+                        }
+                    } catch (error) {
+                        console.error('Error checking recording status:', error);
+                        statusDetails = 'Unable to verify recording status';
                     }
                 } else {
-                    statusClass = 'text-red-600';
-                    statusDetails = 'No execution record found - recording may have been missed';
+                    // Recording time passed
+                    statusText = 'RECORDING TIME PASSED';
+                    statusClass = 'text-gray-600';
+
+                    // Check notes for execution information (for non-recurring or legacy data)
+                    if (notesToDisplay) {
+                        if (notesToDisplay.includes('Last executed:') || notesToDisplay.includes('Recording completed')) {
+                            statusClass = 'text-green-600';
+                            statusDetails = 'Recording completed';
+                        } else if (notesToDisplay.includes('failed') || notesToDisplay.includes('error')) {
+                            statusClass = 'text-red-600';
+                            statusDetails = 'Recording failed - see notes';
+                        } else {
+                            statusClass = 'text-yellow-600';
+                            statusDetails = 'Status unknown - check notes';
+                        }
+                    } else {
+                        statusClass = 'text-red-600';
+                        statusDetails = 'No execution record found - recording may have been missed';
+                    }
                 }
             }
 
@@ -596,16 +720,18 @@
             }
 
             const recordingType = event.capture_video ? 'Audio & Video' : 'Audio only';
+            const occurrenceTimeStr = formatTimeRangeFull(startTime.toISOString(), event.duration);
+
             infoDiv.innerHTML = `
                 <div class="space-y-2">
-                    <div><strong>Time:</strong> ${formatTimeRangeFull(event.start_time, event.duration)}</div>
+                    <div><strong>Time:</strong> ${occurrenceTimeStr}</div>
                     <div><strong>Duration:</strong> ${event.duration / 60} minutes</div>
                     <div><strong>Type:</strong> ${recordingType}</div>
                     <div><strong>Status:</strong> <span class="font-semibold ${statusClass}">${statusText}</span>
                         ${statusDetails ? `<br><span class="text-sm text-gray-600">${statusDetails}</span>` : ''}
                     </div>
                     ${recurrenceInfo ? `<div><strong>Recurrence:</strong> ${recurrenceInfo}</div>` : ''}
-                    ${event.notes ? `<div><strong>Notes:</strong> ${event.notes}</div>` : ''}
+                    ${notesToDisplay ? `<div><strong>Notes:</strong> ${notesToDisplay}</div>` : ''}
                     ${isFutureRecording ? `
                         <div class="mt-4 flex space-x-2">
                             <button onclick='openEditModal(${JSON.stringify(event).replace(/'/g, "&#39;")})' class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
@@ -672,6 +798,9 @@
             document.getElementById('modal-recurrence-type').value = 'weekly';
             document.getElementById('modal-month-day').value = '1';
 
+            // Update day of week display
+            updateDayOfWeek();
+
             toggleModalRecurring();
 
             document.getElementById('create-modal').classList.remove('hidden');
@@ -696,6 +825,9 @@
             document.getElementById('modal-recurring').checked = event.is_recurring;
             document.getElementById('modal-capture-video').checked = event.capture_video;
 
+            // Update day of week display
+            updateDayOfWeek();
+
             // Handle duration warning
             checkModalDurationWarning();
 
@@ -713,8 +845,15 @@
                             const cb = document.querySelector(`.modal-weekday[value="${day}"]`);
                             if (cb) cb.checked = true;
                         });
+                        // Update display text to show the selected day from pattern
+                        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                        if (pattern.days.length > 0) {
+                            document.getElementById('weekly-day-display').textContent = dayNames[pattern.days[0]];
+                        }
                     } else if (pattern.type === 'monthly' && pattern.day) {
                         document.getElementById('modal-month-day').value = pattern.day;
+                        // Update display text to show the selected day from pattern
+                        document.getElementById('monthly-day-display').textContent = pattern.day;
                     }
                 } catch (e) {
                     console.error('Error parsing recurrence pattern:', e);
@@ -738,6 +877,27 @@
             document.getElementById('create-modal').classList.add('hidden');
         }
 
+        function updateDayOfWeek() {
+            const dateInput = document.getElementById('modal-date');
+            const dayDisplay = document.getElementById('day-of-week-display');
+
+            if (!dateInput.value) {
+                dayDisplay.textContent = '';
+                return;
+            }
+
+            const selectedDate = new Date(dateInput.value + 'T00:00:00');
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const dayName = dayNames[selectedDate.getDay()];
+
+            dayDisplay.textContent = dayName;
+
+            // If recurring is checked, update the recurring options too
+            if (document.getElementById('modal-recurring').checked) {
+                updateModalRecurring();
+            }
+        }
+
         function toggleModalRecurring() {
             const isRecurring = document.getElementById('modal-recurring').checked;
             const options = document.getElementById('modal-recurring-options');
@@ -747,8 +907,39 @@
 
         function updateModalRecurring() {
             const type = document.getElementById('modal-recurrence-type').value;
+            const dateInput = document.getElementById('modal-date');
+
             document.getElementById('modal-weekly-options').classList.toggle('hidden', type !== 'weekly');
             document.getElementById('modal-monthly-options').classList.toggle('hidden', type !== 'monthly');
+
+            // Auto-populate based on selected date
+            if (!dateInput.value) return;
+
+            const selectedDate = new Date(dateInput.value + 'T00:00:00');
+            const dayOfWeek = selectedDate.getDay();
+            const dayOfMonth = selectedDate.getDate();
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+            if (type === 'weekly') {
+                // Clear all weekday checkboxes first
+                document.querySelectorAll('.modal-weekday').forEach(cb => cb.checked = false);
+
+                // Check the box for the selected day
+                document.querySelectorAll('.modal-weekday').forEach(cb => {
+                    if (parseInt(cb.value) === dayOfWeek) {
+                        cb.checked = true;
+                    }
+                });
+
+                // Update the display text
+                document.getElementById('weekly-day-display').textContent = dayNames[dayOfWeek];
+            } else if (type === 'monthly') {
+                // Set the day of month
+                document.getElementById('modal-month-day').value = dayOfMonth;
+
+                // Update the display text
+                document.getElementById('monthly-day-display').textContent = dayOfMonth;
+            }
         }
 
         async function saveFromModal() {

@@ -75,6 +75,25 @@ CREATE TABLE scheduled_jobs (
 )
 ```
 
+#### `recording_instances` Table
+```sql
+CREATE TABLE recording_instances (
+    id TEXT PRIMARY KEY,
+    parent_job_id TEXT NOT NULL,
+    occurrence_date TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    started_at TEXT,
+    completed_at TEXT,
+    notes TEXT,
+    FOREIGN KEY (parent_job_id) REFERENCES scheduled_jobs(id) ON DELETE CASCADE
+)
+
+CREATE INDEX idx_instances_parent ON recording_instances(parent_job_id)
+CREATE INDEX idx_instances_date ON recording_instances(occurrence_date)
+```
+
+Tracks individual occurrences of recurring jobs. Created automatically when recordings execute or on-demand when past occurrences are viewed in the calendar.
+
 #### `system_config` Table
 ```sql
 CREATE TABLE system_config (
@@ -138,6 +157,7 @@ CREATE TABLE users (
 | POST | `/api/schedule` | Create scheduled recording |
 | DELETE | `/api/schedule/<job_id>` | Delete scheduled recording |
 | PUT | `/api/schedule/<job_id>` | Update scheduled recording |
+| GET | `/api/schedule/<job_id>/occurrence/<occurrence_date>` | Get/create instance for recurring job occurrence |
 
 ### Recordings API
 | Method | Endpoint | Description |

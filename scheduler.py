@@ -113,6 +113,30 @@ def init_database():
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Recording instances table for tracking individual occurrences of recurring jobs
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS recording_instances (
+                id TEXT PRIMARY KEY,
+                parent_job_id TEXT NOT NULL,
+                occurrence_date TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                started_at TEXT,
+                completed_at TEXT,
+                notes TEXT,
+                FOREIGN KEY (parent_job_id) REFERENCES scheduled_jobs(id) ON DELETE CASCADE
+            )
+        ''')
+
+        # Create indexes for instance queries
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_instances_parent
+            ON recording_instances(parent_job_id)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_instances_date
+            ON recording_instances(occurrence_date)
+        ''')
+
         # System configuration table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS system_config (
@@ -157,6 +181,221 @@ def init_database():
             ''')
 
     db_utils.execute_transaction(DB_PATH, _init_transaction)
+
+
+def get_instances_for_date_range(start_date, end_date):
+    """
+    Fetch all recording instances within a date range
+
+    Args:
+        start_date: Start date (datetime.date or ISO string)
+        end_date: End date (datetime.date or ISO string)
+
+    Returns:
+        List of instance dictionaries
+    """
+    from datetime import date
+
+    # Convert to ISO strings if needed
+    if isinstance(start_date, date):
+        start_date = start_date.isoformat()
+    if isinstance(end_date, date):
+        end_date = end_date.isoformat()
+
+    instances = db_utils.fetch_all(DB_PATH, '''
+        SELECT id, parent_job_id, occurrence_date, status, started_at, completed_at, notes
+        FROM recording_instances
+        WHERE occurrence_date >= ? AND occurrence_date <= ?
+        ORDER BY occurrence_date ASC
+    ''', (start_date, end_date))
+
+    if not instances:
+        return []
+
+    return [
+        {
+            'id': row[0],
+            'parent_job_id': row[1],
+            'occurrence_date': row[2],
+            'status': row[3],
+            'started_at': row[4],
+            'completed_at': row[5],
+            'notes': row[6] or ''
+        }
+        for row in instances
+    ]
+
+
+def get_instance_for_occurrence(job_id, occurrence_date):
+    """
+    Get the instance record for a specific job occurrence
+
+    Args:
+        job_id: Parent job ID
+        occurrence_date: Date of occurrence (datetime.date or ISO string)
+
+    Returns:
+        Instance dictionary or None if not found
+    """
+    from datetime import date
+
+    if isinstance(occurrence_date, date):
+        occurrence_date = occurrence_date.isoformat()
+
+    instance = db_utils.fetch_one(DB_PATH, '''
+        SELECT id, parent_job_id, occurrence_date, status, started_at, completed_at, notes
+        FROM recording_instances
+        WHERE parent_job_id = ? AND occurrence_date = ?
+    ''', (job_id, occurrence_date))
+
+    if not instance:
+        return None
+
+    return {
+        'id': instance[0],
+        'parent_job_id': instance[1],
+        'occurrence_date': instance[2],
+        'status': instance[3],
+        'started_at': instance[4],
+        'completed_at': instance[5],
+        'notes': instance[6] or ''
+    }
+
+
+def create_or_update_instance(job_id, occurrence_date, status, started_at=None, completed_at=None, notes=''):
+    """
+    Create or update a recording instance
+
+    Args:
+        job_id: Parent job ID
+        occurrence_date: Date of occurrence (datetime.date or ISO string)
+        status: Instance status ('pending', 'completed', 'failed', 'missed')
+        started_at: When recording started (ISO string)
+        completed_at: When recording completed (ISO string)
+        notes: Instance notes
+
+    Returns:
+        Instance ID
+    """
+    from datetime import date
+
+    if isinstance(occurrence_date, date):
+        occurrence_date = occurrence_date.isoformat()
+
+    instance_id = f"{job_id}_{occurrence_date}"
+
+    db_utils.execute(DB_PATH, '''
+        INSERT OR REPLACE INTO recording_instances
+        (id, parent_job_id, occurrence_date, status, started_at, completed_at, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (instance_id, job_id, occurrence_date, status, started_at, completed_at, notes))
+
+    return instance_id
+
+
+def ensure_instance_exists(job_id, occurrence_date):
+    """
+    Check if an instance exists for a past occurrence and create one if missing.
+    This function repairs missing instances for past occurrences of recurring jobs.
+
+    Args:
+        job_id: Parent job ID
+        occurrence_date: Date of occurrence (datetime.date or ISO string)
+
+    Returns:
+        Tuple of (instance_dict, was_created)
+    """
+    from datetime import datetime, date
+    import json
+
+    if isinstance(occurrence_date, date):
+        occurrence_date_str = occurrence_date.isoformat()
+        occurrence_date_obj = occurrence_date
+    else:
+        occurrence_date_str = occurrence_date
+        occurrence_date_obj = datetime.fromisoformat(occurrence_date).date()
+
+    # Check if instance already exists
+    existing_instance = get_instance_for_occurrence(job_id, occurrence_date_str)
+    if existing_instance:
+        return existing_instance, False
+
+    # Instance doesn't exist - check if it should
+    job_info = db_utils.fetch_one(DB_PATH, '''
+        SELECT name, start_time, duration, is_recurring, recurrence_pattern, notes, capture_video
+        FROM scheduled_jobs
+        WHERE id = ?
+    ''', (job_id,))
+
+    if not job_info:
+        return None, False
+
+    name, start_time_str, duration, is_recurring, recurrence_pattern, job_notes, capture_video = job_info
+
+    # Only create instances for recurring jobs
+    if not is_recurring:
+        return None, False
+
+    # Parse the job's start time to get the time component
+    job_start_dt = datetime.fromisoformat(start_time_str)
+    time_component = job_start_dt.time()
+
+    # Combine occurrence date with the job's time
+    occurrence_datetime = datetime.combine(occurrence_date_obj, time_component)
+
+    # Check if this occurrence date matches the recurrence pattern
+    pattern = json.loads(recurrence_pattern) if recurrence_pattern else {}
+    should_occur = False
+
+    if pattern.get('type') == 'daily':
+        should_occur = True
+    elif pattern.get('type') == 'weekly':
+        day_of_week = (occurrence_date_obj.weekday() + 1) % 7  # Convert to 0=Mon, 6=Sun
+        should_occur = day_of_week in pattern.get('days', [])
+    elif pattern.get('type') == 'monthly':
+        should_occur = occurrence_date_obj.day == pattern.get('day')
+
+    if not should_occur:
+        return None, False
+
+    # Check if this occurrence is in the past
+    now = datetime.now()
+    occurrence_end = occurrence_datetime + datetime.timedelta(seconds=duration)
+
+    if occurrence_end > now:
+        # Future occurrence - don't create instance yet
+        return None, False
+
+    # Determine status based on job notes (legacy migration)
+    # Try to infer if this occurrence was executed based on notes
+    status = 'missed'  # Default to missed for past occurrences
+    notes_to_save = f"Auto-created instance for past occurrence on {occurrence_date_str}"
+
+    if job_notes:
+        # Parse job notes to see if there's execution history
+        if 'Last executed:' in job_notes:
+            # Try to extract the execution date
+            import re
+            match = re.search(r'Last executed: (\d{4}-\d{2}-\d{2})', job_notes)
+            if match:
+                last_exec_date = match.group(1)
+                if last_exec_date == occurrence_date_str:
+                    status = 'completed'
+                    notes_to_save = job_notes
+
+    # Create the instance
+    instance_id = create_or_update_instance(
+        job_id=job_id,
+        occurrence_date=occurrence_date_str,
+        status=status,
+        started_at=occurrence_datetime.isoformat() if status == 'completed' else None,
+        completed_at=occurrence_end.isoformat() if status == 'completed' else None,
+        notes=notes_to_save
+    )
+
+    logger.info(f"Created missing instance {instance_id} for job {job_id} on {occurrence_date_str} with status '{status}'")
+
+    return get_instance_for_occurrence(job_id, occurrence_date_str), True
 
 
 def create_job(start_time, duration, name='Unnamed Recording', notes='',
@@ -499,16 +738,23 @@ def _execute_scheduled_recording(job_id, duration, allow_override=False, capture
             ''', (datetime.now().isoformat(), status_note, job_id), commit=True)
             logger.info(f"Job {job_id} marked as completed (one-time job)")
         else:
-            # For recurring jobs, add execution note but keep status as 'pending'
-            execution_note = f"Last executed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            # For recurring jobs, create an instance record for this occurrence
+            now = datetime.now()
+            occurrence_date = now.date().isoformat()
+            execution_note = f"Recording completed at {now.strftime('%Y-%m-%d %H:%M:%S')}"
             if status_note:
                 execution_note += f" ({status_note})"
-            db_utils.execute_query(DB_PATH, '''
-                UPDATE scheduled_jobs
-                SET notes = ?
-                WHERE id = ?
-            ''', (execution_note, job_id), commit=True)
-            logger.info(f"Job {job_id} executed successfully (recurring job - status remains pending)")
+
+            # Create instance record
+            create_or_update_instance(
+                job_id=job_id,
+                occurrence_date=occurrence_date,
+                status='completed',
+                started_at=now.isoformat(),
+                completed_at=(now + datetime.timedelta(seconds=duration)).isoformat(),
+                notes=execution_note
+            )
+            logger.info(f"Job {job_id} executed successfully - instance created for {occurrence_date} (recurring job)")
 
     except Exception as e:
         logger.error(f"Job {job_id} FAILED: {e}")
@@ -529,14 +775,21 @@ def _execute_scheduled_recording(job_id, duration, allow_override=False, capture
             ''', (datetime.now().isoformat(), str(e), job_id), commit=True)
             logger.info(f"Job {job_id} marked as failed (one-time job)")
         else:
-            # For recurring jobs, add error note but keep status as 'pending'
-            error_note = f"Last execution failed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {str(e)}"
-            db_utils.execute_query(DB_PATH, '''
-                UPDATE scheduled_jobs
-                SET notes = ?
-                WHERE id = ?
-            ''', (error_note, job_id), commit=True)
-            logger.info(f"Job {job_id} execution failed (recurring job - status remains pending)")
+            # For recurring jobs, create a failed instance record
+            now = datetime.now()
+            occurrence_date = now.date().isoformat()
+            error_note = f"Recording failed at {now.strftime('%Y-%m-%d %H:%M:%S')}: {str(e)}"
+
+            # Create failed instance record
+            create_or_update_instance(
+                job_id=job_id,
+                occurrence_date=occurrence_date,
+                status='failed',
+                started_at=now.isoformat(),
+                completed_at=None,
+                notes=error_note
+            )
+            logger.info(f"Job {job_id} execution failed - instance created for {occurrence_date} (recurring job)")
 
 
 def restore_jobs_on_startup():

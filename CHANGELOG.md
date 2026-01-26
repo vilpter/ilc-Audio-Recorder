@@ -2,6 +2,45 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.5.4] - 2026-01-26
+
+### Added
+- **Recording Instances Table** - Individual occurrence tracking for recurring recordings
+  - New `recording_instances` table stores status for each past occurrence
+  - Hybrid approach: pattern-based for future, instance-based for past
+  - Automatic repair mechanism creates missing instances on-demand
+  - Foreign key CASCADE DELETE for automatic cleanup when parent job deleted
+  - Indexes on `parent_job_id` and `occurrence_date` for query performance
+
+### Changed
+- **Calendar Event Display** - Accurate status and timing for recurring recordings
+  - Calendar now shows occurrence-specific status (completed, failed, missed)
+  - Event details display correct timing for each occurrence (not just first scheduled time)
+  - Past occurrences only display if an instance record exists
+  - Color coding reflects instance status (green=completed, red=failed, yellow=missed)
+- **Automatic Instance Creation** - Clicking past recurring events triggers repair
+  - New API endpoint `/api/schedule/<job_id>/occurrence/<occurrence_date>`
+  - Automatically creates missing instances for past occurrences when selected
+  - Infers status from job notes for legacy data migration
+  - Updates calendar display dynamically after instance creation
+- **Recurring Schedule Creation** - Simplified and more intuitive
+  - Day of week now displayed below date selection
+  - Weekly recurrence automatically uses the selected date's day of week
+  - Monthly recurrence automatically uses the selected date's day of month
+  - Removed manual day/date prompts (auto-populated from calendar selection)
+
+### Technical
+- Added `get_instances_for_date_range()` function in scheduler.py
+- Added `get_instance_for_occurrence()` function in scheduler.py
+- Added `create_or_update_instance()` function in scheduler.py
+- Added `ensure_instance_exists()` function with pattern validation and status inference
+- Modified job execution to create instance records on completion
+- Enhanced `getEventsForDay()` JavaScript function to check instances for past dates
+- Rewrote `showEventDetails()` JavaScript function with async instance fetching
+- Updated index route to pass instances data to calendar template
+
+---
+
 ## [1.5.3] - 2026-01-25
 
 ### Added

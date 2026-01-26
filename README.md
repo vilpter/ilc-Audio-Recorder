@@ -467,14 +467,22 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
 ### Planned Features
 - Make top ribbon sticky when scrolling.  Evaluate whether webpage structural changes would be best practice to implement this, but recommend what to do before implementing.
-- Update desktop to use hamburger menu the same as the mobile display
+- Update desktop html to use hamburger menu the same as the mobile display
 - Add support for multiple user accounts
 - In Controls, add an indication of any other users who are currently logged in.
 - Audio post-processing (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate
 - Note the last date of download for files
 - Audio file analysis (silence detection, dB level analysis) using `audio_analyzer.py`
+- Develop a database clean-up selection button that would be displayed on the Schedule page.  Selecting the button should provide the user an option to select a number of months of past schedule to retain and delete prior schedule entries.
 
-### Recently Completed (v1.5.3)
+### Recently Completed (v1.5.4)
+- Recording instances table for tracking individual occurrences of recurring recordings
+- Calendar now shows accurate status and timing for each recurring recording occurrence
+- Automatic instance repair when viewing past recurring events
+- Simplified recurring schedule creation (auto-populates day/date from calendar selection)
+- Day of week display added to date selection in Create New Recording modal
+
+### Previously Completed (v1.5.1/v1.5.2/v1.5.3)
 - Enhanced diagnostic logging with dedicated log files (recorder, scheduler, FFmpeg)
 - Log viewer shows file path and supports all log types
 - System state logging at recording start (environment variables, ALSA mixer state)
@@ -482,8 +490,6 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 - FFmpeg stderr capture for debugging silent recording issues
 - New troubleshooting script (`troubleshoot_audio.sh`) for diagnosing scheduled recordings
 - Local timezone timestamps in all logs
-
-### Previously Completed (v1.5.1/v1.5.2)
 - Renamed "New/In Progress" to "Control" in navigation
 - Added A/A&V indicators to calendar for audio vs audio+video recordings
 - Renamed "Recording Filename Configuration" to "Audio Filename Nomenclature"

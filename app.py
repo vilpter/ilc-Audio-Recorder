@@ -160,8 +160,16 @@ def change_password():
 @login_required
 def index():
     """Calendar view - main landing page"""
+    from datetime import datetime, timedelta
+
     jobs = scheduler.get_all_jobs()
-    return render_template('calendar.html', jobs=jobs)
+
+    # Fetch instances for calendar view (past 90 days and next 30 days)
+    start_date = (datetime.now() - timedelta(days=90)).date()
+    end_date = (datetime.now() + timedelta(days=30)).date()
+    instances = scheduler.get_instances_for_date_range(start_date, end_date)
+
+    return render_template('calendar.html', jobs=jobs, instances=instances)
 
 
 @app.route('/api/status')
@@ -459,6 +467,31 @@ def update_schedule(job_id):
     except ValueError as e:
         return jsonify({'error': str(e)}), 404
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/schedule/<job_id>/occurrence/<occurrence_date>', methods=['GET'])
+@login_required
+def get_occurrence_instance(job_id, occurrence_date):
+    """
+    Get or create instance for a specific occurrence of a recurring job.
+    Automatically repairs missing instances for past occurrences.
+    """
+    try:
+        # Ensure instance exists (will create if missing for past occurrence)
+        instance, was_created = scheduler.ensure_instance_exists(job_id, occurrence_date)
+
+        if instance is None:
+            # Instance doesn't exist and shouldn't (future occurrence or invalid pattern)
+            return jsonify({'instance': None, 'was_created': False}), 200
+
+        return jsonify({
+            'instance': instance,
+            'was_created': was_created
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error fetching/creating instance for {job_id} on {occurrence_date}: {e}")
         return jsonify({'error': str(e)}), 500
 
 
