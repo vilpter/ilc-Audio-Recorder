@@ -146,6 +146,29 @@ def init_database():
             )
         ''')
 
+        # Audio analysis results table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS audio_analysis (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                analyzed_at TEXT NOT NULL,
+                total_duration REAL,
+                non_silent_percentage REAL,
+                mean_db REAL,
+                max_db REAL,
+                max_db_time REAL,
+                status TEXT DEFAULT 'completed',
+                error_message TEXT,
+                UNIQUE(filename, channel)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_analysis_filename
+            ON audio_analysis(filename)
+        ''')
+
         # Set default audio device to auto-detect
         cursor.execute('''
             INSERT OR IGNORE INTO system_config (key, value, updated_at)

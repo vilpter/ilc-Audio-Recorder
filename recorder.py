@@ -378,8 +378,14 @@ def stop_capture():
             # Force kill if necessary
             current_process.kill()
             current_process.wait()
-        
+
         current_process = None
+
+    # Check for unanalyzed files in background
+    threading.Thread(
+        target=analyze_unanalyzed_recordings,
+        daemon=True
+    ).start()
 
 
 def _monitor_process(process, paths, duration):
@@ -436,12 +442,154 @@ def _monitor_process(process, paths, duration):
             logger.warning(f"WARNING: File sizes are smaller than expected ({expected_size_mb:.1f} MB). "
                           f"Recording may be truncated or silent!")
 
+        # Schedule analysis after 20-second delay
+        threading.Timer(
+            20.0,  # 20 second delay
+            _analyze_recording_delayed,
+            args=(paths['source_a'], paths['source_b'], job_timestamp)
+        ).start()
+
         print(f"Recording completed: {paths['timestamp']}")
     else:
         logger.error(f"Recording FAILED: {job_timestamp} - output files not created")
         logger.error(f"  Expected: {paths['source_a']}")
         logger.error(f"  Expected: {paths['source_b']}")
         print(f"Recording failed: {paths['timestamp']}")
+
+
+def _analyze_recording_delayed(source_a, source_b, job_timestamp):
+    """
+    Analyze recording files and store results in database.
+    Called 20 seconds after recording completes.
+
+    Args:
+        source_a: Path to left channel WAV file
+        source_b: Path to right channel WAV file
+        job_timestamp: Recording timestamp identifier
+    """
+    import audio_analyzer
+    import db_utils
+    from datetime import datetime
+
+    logger.info(f"Starting analysis for recording: {job_timestamp}")
+
+    def analyze_and_store(filepath, channel_name):
+        """Analyze single channel and store results"""
+        try:
+            # Verify file still exists and has content
+            if not filepath.exists() or filepath.stat().st_size == 0:
+                logger.warning(f"File not found or empty: {filepath}")
+                return
+
+            # Run analysis
+            result = audio_analyzer.analyze_audio_file(
+                str(filepath),
+                silence_threshold_db=-60.0,
+                silence_duration_sec=2.0
+            )
+
+            # Extract channel 0 stats (mono file)
+            channel_stats = result['channels'][0] if result['channels'] else None
+
+            if not channel_stats:
+                logger.error(f"No channel data in analysis for {filepath}")
+                return
+
+            # Store in database
+            from scheduler import DB_PATH
+            db_utils.execute(DB_PATH, '''
+                INSERT OR REPLACE INTO audio_analysis
+                (filename, channel, analyzed_at, total_duration, non_silent_percentage,
+                 mean_db, max_db, max_db_time, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                filepath.name,
+                channel_name,
+                datetime.now().isoformat(),
+                channel_stats['total_duration'],
+                channel_stats['non_silent_percentage'],
+                channel_stats['mean_db'],
+                channel_stats['max_db'],
+                channel_stats['max_db_time'],
+                'completed'
+            ))
+
+            logger.info(f"Analysis completed for {filepath.name}: "
+                       f"{channel_stats['non_silent_percentage']:.1f}% non-silent, "
+                       f"max {channel_stats['max_db']:.1f} dB")
+
+        except Exception as e:
+            logger.error(f"Analysis failed for {filepath}: {e}")
+            # Store failure status
+            try:
+                from scheduler import DB_PATH
+                db_utils.execute(DB_PATH, '''
+                    INSERT OR REPLACE INTO audio_analysis
+                    (filename, channel, analyzed_at, status, error_message)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (filepath.name, channel_name, datetime.now().isoformat(),
+                     'failed', str(e)))
+            except:
+                pass
+
+    # Analyze both channels
+    analyze_and_store(source_a, 'left')
+    analyze_and_store(source_b, 'right')
+
+    logger.info(f"Analysis batch complete for: {job_timestamp}")
+
+
+def analyze_unanalyzed_recordings():
+    """
+    Check for WAV files without analysis and analyze them.
+    Called on app startup and when recordings stop.
+    """
+    from pathlib import Path
+    from scheduler import get_system_config, DB_PATH
+    import db_utils
+
+    storage_path = get_system_config('storage_path', '/mnt/usb_recorder')
+    recordings_dir = Path(storage_path)
+
+    if not recordings_dir.exists():
+        return
+
+    # Get all analyzed filenames
+    analyzed_files = set()
+    try:
+        results = db_utils.fetch_all(DB_PATH,
+            'SELECT DISTINCT filename FROM audio_analysis')
+        analyzed_files = {row[0] for row in results}
+    except:
+        pass  # Table might not exist yet
+
+    # Find unanalyzed WAV files
+    wav_files = list(recordings_dir.glob('*.wav'))
+    unanalyzed = [f for f in wav_files if f.name not in analyzed_files]
+
+    if unanalyzed:
+        logger.info(f"Found {len(unanalyzed)} unanalyzed recordings")
+
+        # Group by pairs (left/right)
+        pairs = {}
+        for filepath in unanalyzed:
+            # Extract base timestamp (remove _L or _R suffix)
+            name = filepath.stem
+            if name.endswith('_L'):
+                base = name[:-2]
+                pairs.setdefault(base, {})['left'] = filepath
+            elif name.endswith('_R'):
+                base = name[:-2]
+                pairs.setdefault(base, {})['right'] = filepath
+
+        # Analyze pairs in background
+        for base_name, files in pairs.items():
+            if 'left' in files and 'right' in files:
+                threading.Thread(
+                    target=_analyze_recording_delayed,
+                    args=(files['left'], files['right'], base_name),
+                    daemon=True
+                ).start()
 
 
 def is_recording():

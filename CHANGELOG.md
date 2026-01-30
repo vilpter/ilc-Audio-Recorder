@@ -2,6 +2,39 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.7.0] - 2026-01-29
+
+### Added
+- **Automatic Audio File Analysis** - Post-recording analysis of all audio files
+  - Silence detection using FFmpeg's silencedetect filter
+  - dB level analysis (mean and max) for each channel
+  - Automatic analysis 20 seconds after recording completes
+  - Background batch analysis for existing unanalyzed files
+  - Database storage of analysis results in new `audio_analysis` table
+  - Per-channel analysis (separate results for left and right channels)
+- **Interactive Analysis Tooltips** - Visual display of analysis results in Recordings page
+  - Hover over any filename to view analysis data
+  - Shows duration, non-silent percentage, mean/max dB levels
+  - Per-channel breakdown (left and right displayed separately)
+  - Color-coded indicators (yellow for low non-silent %, green for good levels)
+  - Cached API responses for better performance
+  - Graceful handling of missing or failed analysis
+- **New API Endpoint** - `/api/recordings/<filename>/analysis`
+  - Returns JSON with analysis results for both channels
+  - Handles missing analysis gracefully
+  - Supports error status tracking
+
+### Technical
+- Added `audio_analysis` table to database schema (scheduler.py)
+- New function `_analyze_recording_delayed()` in recorder.py
+- New function `analyze_unanalyzed_recordings()` in recorder.py
+- Analysis triggered via threading.Timer with 20-second delay
+- Batch analysis runs on recording stop
+- JavaScript tooltip functions with fetch API and caching
+- Uses existing `audio_analyzer.py` module (added in v1.5.3)
+
+---
+
 ## [1.5.5] - 2026-01-29
 
 ### Added

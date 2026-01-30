@@ -554,6 +554,50 @@ def delete_file(filename):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/recordings/<filename>/analysis')
+@login_required
+def get_file_analysis(filename):
+    """Get audio analysis results for a recording file"""
+    try:
+        # Fetch analysis for both channels
+        results = db_utils.fetch_all(scheduler.DB_PATH, '''
+            SELECT channel, analyzed_at, total_duration, non_silent_percentage,
+                   mean_db, max_db, max_db_time, status, error_message
+            FROM audio_analysis
+            WHERE filename = ?
+            ORDER BY channel
+        ''', (filename,))
+
+        if not results:
+            return jsonify({'analyzed': False, 'message': 'No analysis available'})
+
+        # Format response
+        analysis_data = {
+            'analyzed': True,
+            'filename': filename,
+            'channels': []
+        }
+
+        for row in results:
+            channel_data = {
+                'channel': row[0],  # 'left' or 'right'
+                'analyzed_at': row[1],
+                'total_duration': row[2],
+                'non_silent_percentage': row[3],
+                'mean_db': row[4],
+                'max_db': row[5],
+                'max_db_time': row[6],
+                'status': row[7],
+                'error_message': row[8]
+            }
+            analysis_data['channels'].append(channel_data)
+
+        return jsonify(analysis_data)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/recordings/batch/delete', methods=['POST'])
 @login_required
 def batch_delete_files():

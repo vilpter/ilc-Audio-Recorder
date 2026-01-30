@@ -13,6 +13,8 @@ A professional-grade dual-channel audio and video recording system with web-base
 - Human-readable filename format: `YYYY_MMM_DD_HH:MM_L.wav`
 - 4-hour duration limit with override option
 - Pre-flight disk space checking
+- Automatic post-recording analysis (silence detection, dB levels)
+- Interactive tooltips showing analysis results per channel
 
 ### Video Recording
 - PTZOptics camera integration for synchronized A/V capture
@@ -182,6 +184,7 @@ sudo systemctl start audio-recorder
 - Browse raw and processed video files
 - Batch select for bulk download or delete
 - Download recordings as ZIP archive
+- Hover over filenames to view audio analysis (duration, silence percentage, dB levels)
 
 ### Settings (/settings)
 - Configure audio device (auto-detect or manual)
@@ -207,7 +210,7 @@ audio-recorder/
 ├── configure_audio.sh        # Audio configuration helper
 ├── fix_service.sh            # Service troubleshooting script
 ├── troubleshoot_audio.sh     # Diagnostic script for scheduled recordings
-├── audio_analyzer.py         # Audio analysis utilities (future feature)
+├── audio_analyzer.py         # Audio analysis module (silence detection, dB levels)
 ├── configs/
 │   ├── asound.conf           # ALSA configuration
 │   └── 85-usb-audio.rules    # udev rules for USB audio
@@ -438,7 +441,14 @@ On first access, you'll be prompted to create an admin account:
 
 ## Changelog (full details in CHANGELOG.md)
 
-### v1.6.0 (Current)
+### v1.7.0 (Current)
+- Automatic audio file analysis after recordings complete
+- Silence detection and dB level analysis for each channel
+- Interactive tooltips in Recordings page showing analysis results
+- Background batch analysis for unanalyzed files
+- Database storage for persistent analysis results
+
+### v1.6.0
 - Added sticky navigation bar that remains visible while scrolling
 - Implemented template inheritance for cleaner HTML structure and better maintainability
 - Fixed recurring schedule database serialization issue
@@ -471,7 +481,6 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 ## Roadmap
 
 ### Planned Features
-- Audio file analysis (silence detection, dB level analysis) using `audio_analyzer.py`
 - Add configurable audio post-processing (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate
 - Add support for multiple user accounts
 - In Controls, add an indication of any other users who are currently logged in
@@ -492,5 +501,5 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
 ---
 
-**Version:** 1.6.0
-**Last Updated:** 2026-01-26
+**Version:** 1.7.0
+**Last Updated:** 2026-01-29

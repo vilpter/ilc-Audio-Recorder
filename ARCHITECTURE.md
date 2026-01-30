@@ -112,6 +112,40 @@ Default configuration keys:
 - `camera_password` - Camera HTTP auth password
 - `usb_storage_path` - Video recording storage path
 
+#### `audio_analysis` Table
+```sql
+CREATE TABLE audio_analysis (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    analyzed_at TEXT NOT NULL,
+    total_duration REAL,
+    non_silent_percentage REAL,
+    mean_db REAL,
+    max_db REAL,
+    max_db_time REAL,
+    status TEXT DEFAULT 'completed',
+    error_message TEXT,
+    UNIQUE(filename, channel)
+)
+
+CREATE INDEX idx_analysis_filename ON audio_analysis(filename)
+```
+
+Stores audio analysis results for each channel of recorded files. Analysis is automatically performed 20 seconds after recording completes. Batch analysis also runs when recordings are stopped to catch any previously unanalyzed files.
+
+Fields:
+- `filename` - Audio file name (e.g., `2026_Jan_29_14:30_L.wav`)
+- `channel` - 'left' or 'right'
+- `analyzed_at` - ISO timestamp when analysis completed
+- `total_duration` - Recording duration in seconds
+- `non_silent_percentage` - Percentage of non-silent audio (0-100)
+- `mean_db` - Mean dB level across non-silent portions
+- `max_db` - Peak dB level
+- `max_db_time` - Timestamp where max dB occurs (seconds from start)
+- `status` - 'completed' or 'failed'
+- `error_message` - Error details if analysis failed
+
 ### Authentication Database (`~/.audio-recorder/auth.db`)
 
 #### `users` Table
@@ -164,6 +198,7 @@ CREATE TABLE users (
 |--------|----------|-------------|
 | GET | `/api/recordings/<filename>` | Download recording file |
 | DELETE | `/api/recordings/<filename>` | Delete recording file |
+| GET | `/api/recordings/<filename>/analysis` | Get audio analysis results |
 | POST | `/api/recordings/batch/delete` | Batch delete recordings |
 | POST | `/api/recordings/batch/download` | Batch download as ZIP |
 

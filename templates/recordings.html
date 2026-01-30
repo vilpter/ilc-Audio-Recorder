@@ -50,8 +50,22 @@
                                 <input type="checkbox" class="file-checkbox w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                     data-filename="{{ file.name }}" onchange="updateSelection()">
                             </td>
-                            <td class="p-3">
-                                <span class="font-mono text-sm">{{ file.name }}</span>
+                            <td class="p-3 relative">
+                                <span class="font-mono text-sm cursor-help group relative"
+                                      data-filename="{{ file.name }}"
+                                      onmouseenter="loadAnalysisTooltip('{{ file.name }}', this)"
+                                      onmouseleave="hideTooltip(this)">
+                                    {{ file.name }}
+
+                                    <!-- Tooltip container (hidden by default) -->
+                                    <div class="tooltip-popup hidden absolute left-0 top-full mt-2 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl z-50 min-w-[300px]">
+                                        <div class="tooltip-loading">Loading analysis...</div>
+                                        <div class="tooltip-content hidden"></div>
+                                        <div class="tooltip-error hidden text-red-300"></div>
+                                        <!-- Pointer arrow -->
+                                        <div class="absolute bottom-full left-4 border-4 border-transparent border-b-gray-900"></div>
+                                    </div>
+                                </span>
                             </td>
                             <td class="p-3 text-gray-600">
                                 {{ file.size_mb }} MB
@@ -350,5 +364,110 @@
         loadVideoFiles();
         updateVideoStorage();
         setInterval(loadVideoFiles, 10000);
+
+        // Audio Analysis Tooltip Functions
+        // Cache for analysis results (avoid repeated API calls)
+        const analysisCache = {};
+
+        async function loadAnalysisTooltip(filename, element) {
+            const tooltip = element.querySelector('.tooltip-popup');
+            const loading = tooltip.querySelector('.tooltip-loading');
+            const content = tooltip.querySelector('.tooltip-content');
+            const error = tooltip.querySelector('.tooltip-error');
+
+            // Show tooltip
+            tooltip.classList.remove('hidden');
+
+            // Check cache first
+            if (analysisCache[filename]) {
+                displayAnalysis(analysisCache[filename], content, loading, error);
+                return;
+            }
+
+            // Fetch analysis from API
+            try {
+                const response = await fetch(`/api/recordings/${encodeURIComponent(filename)}/analysis`);
+                const data = await response.json();
+
+                // Cache result
+                analysisCache[filename] = data;
+
+                displayAnalysis(data, content, loading, error);
+            } catch (err) {
+                loading.classList.add('hidden');
+                error.textContent = 'Failed to load analysis';
+                error.classList.remove('hidden');
+            }
+        }
+
+        function displayAnalysis(data, content, loading, error) {
+            loading.classList.add('hidden');
+
+            if (!data.analyzed) {
+                error.textContent = 'Analysis not available yet';
+                error.classList.remove('hidden');
+                return;
+            }
+
+            // Build tooltip content
+            let html = '<div class="space-y-2">';
+
+            data.channels.forEach(ch => {
+                const channelLabel = ch.channel === 'left' ? 'Left Channel (L)' : 'Right Channel (R)';
+
+                if (ch.status === 'failed') {
+                    html += `<div class="border-b border-gray-700 pb-2">
+                        <div class="font-semibold text-red-300">${channelLabel}: Analysis Failed</div>
+                        <div class="text-red-200 text-xs">${ch.error_message || 'Unknown error'}</div>
+                    </div>`;
+                } else {
+                    html += `<div class="border-b border-gray-700 pb-2 last:border-b-0">
+                        <div class="font-semibold mb-1">${channelLabel}</div>
+                        <div class="grid grid-cols-2 gap-x-3 gap-y-1">
+                            <div class="text-gray-300">Duration:</div>
+                            <div>${formatDuration(ch.total_duration)}</div>
+
+                            <div class="text-gray-300">Non-silent:</div>
+                            <div class="font-medium ${ch.non_silent_percentage < 50 ? 'text-yellow-300' : 'text-green-300'}">
+                                ${ch.non_silent_percentage.toFixed(1)}%
+                            </div>
+
+                            <div class="text-gray-300">Mean dB:</div>
+                            <div>${ch.mean_db.toFixed(1)} dB</div>
+
+                            <div class="text-gray-300">Max dB:</div>
+                            <div class="font-medium">${ch.max_db.toFixed(1)} dB</div>
+
+                            <div class="text-gray-300">Max at:</div>
+                            <div>${formatTime(ch.max_db_time)}</div>
+                        </div>
+                    </div>`;
+                }
+            });
+
+            html += '</div>';
+
+            content.innerHTML = html;
+            content.classList.remove('hidden');
+        }
+
+        function hideTooltip(element) {
+            const tooltip = element.querySelector('.tooltip-popup');
+            setTimeout(() => {
+                tooltip.classList.add('hidden');
+            }, 200);  // Small delay to prevent flicker
+        }
+
+        function formatDuration(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}m ${secs}s`;
+        }
     </script>
 {% endblock %}
