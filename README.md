@@ -194,6 +194,7 @@ sudo systemctl start audio-recorder
 - Test camera connection
 - Customize recording filename format
 - Export/import schedules and configuration
+- Database clean-up tool to remove old recording entries
 
 ## File Structure
 
@@ -441,7 +442,14 @@ On first access, you'll be prompted to create an admin account:
 
 ## Changelog (full details in CHANGELOG.md)
 
-### v1.7.0 (Current)
+### v1.7.1 (Current)
+- Database clean-up tool in Settings page
+- Remove old completed, failed, cancelled, or missed recording entries
+- Configurable retention period (1, 3, 6, 12, 24 months)
+- Two-step confirmation with preview of deletion counts
+- Preserves recurring recording patterns
+
+### v1.7.0
 - Automatic audio file analysis after recordings complete
 - Silence detection and dB level analysis for each channel
 - Interactive tooltips in Recordings page showing analysis results
@@ -485,7 +493,6 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 - Add support for multiple user accounts
 - In Controls, add an indication of any other users who are currently logged in
 - Note the last date of download for files
-- Develop a database clean-up selection button that would be displayed on the Schedule page. Selecting the button should provide the user an option to select a number of months of past schedule to retain and delete prior schedule entries
 
 ## Built With
 
@@ -501,5 +508,5 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
 ---
 
-**Version:** 1.7.0
+**Version:** 1.7.1
 **Last Updated:** 2026-01-29

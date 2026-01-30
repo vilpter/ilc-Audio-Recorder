@@ -192,6 +192,8 @@ CREATE TABLE users (
 | DELETE | `/api/schedule/<job_id>` | Delete scheduled recording |
 | PUT | `/api/schedule/<job_id>` | Update scheduled recording |
 | GET | `/api/schedule/<job_id>/occurrence/<occurrence_date>` | Get/create instance for recurring job occurrence |
+| POST | `/api/schedule/cleanup/preview` | Preview database cleanup counts |
+| POST | `/api/schedule/cleanup` | Execute database cleanup (requires confirm: true) |
 
 ### Recordings API
 | Method | Endpoint | Description |

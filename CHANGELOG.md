@@ -2,6 +2,31 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.7.1] - 2026-01-29
+
+### Added
+- **Database Clean-Up Tool** - Remove old recording entries in Settings page
+  - Located in Backup & Restore section
+  - Dropdown with preset retention periods (1, 3, 6, 12, 24 months)
+  - Two-step confirmation process with preview of deletion counts
+  - Removes completed, failed, cancelled, and missed recordings
+  - Deletes old instances from recurring jobs while preserving patterns
+  - Shows cutoff date and total entries to be deleted before execution
+  - Success confirmation with detailed deletion statistics
+- **New API Endpoints**
+  - `POST /api/schedule/cleanup/preview` - Preview cleanup counts without executing
+  - `POST /api/schedule/cleanup` - Execute database cleanup with confirmation
+
+### Technical
+- New function `cleanup_old_records()` in scheduler.py for atomic cleanup operations
+- New function `get_cleanup_preview()` in scheduler.py for non-destructive preview
+- Uses database transactions to ensure atomic deletions
+- Removes jobs from APScheduler before database deletion
+- Foreign key CASCADE automatically removes related instances
+- Input validation (1-120 months) prevents invalid cleanup operations
+
+---
+
 ## [1.7.0] - 2026-01-29
 
 ### Added

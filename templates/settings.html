@@ -283,6 +283,18 @@
                     Revert buttons are enabled after importing backups
                 </p>
             </div>
+
+            <!-- Database Clean-Up -->
+            <div class="border-t pt-4">
+                <h3 class="font-semibold text-gray-700 mb-3">Database Clean-Up</h3>
+                <p class="text-sm text-gray-600 mb-3">
+                    Remove old completed, failed, or cancelled recording entries to free up database space.
+                    Recurring recording patterns are preserved.
+                </p>
+                <button onclick="openCleanupModal()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded text-sm sm:text-base">
+                    Clean Up Database
+                </button>
+            </div>
         </div>
 
         <!-- Account Settings -->
@@ -397,6 +409,103 @@
                     class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded">
                     Select This Directory
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Cleanup Modal -->
+    <div id="cleanup-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold">Database Clean-Up</h3>
+                <button onclick="closeCleanupModal()" class="text-gray-500 hover:text-gray-700 text-2xl">
+                    &times;
+                </button>
+            </div>
+
+            <div id="cleanup-step-1" class="space-y-4">
+                <p class="text-gray-700">
+                    Remove old recording entries to free up database space.
+                </p>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Delete entries older than:
+                    </label>
+                    <select id="cleanup-months" class="w-full border border-gray-300 rounded px-3 py-2">
+                        <option value="1">1 month</option>
+                        <option value="3" selected>3 months</option>
+                        <option value="6">6 months</option>
+                        <option value="12">12 months</option>
+                        <option value="24">24 months</option>
+                    </select>
+                </div>
+
+                <div class="bg-gray-50 p-3 rounded text-sm">
+                    <p class="font-medium mb-1">Will delete:</p>
+                    <ul class="list-disc list-inside space-y-1 text-gray-700">
+                        <li>Completed one-time recordings</li>
+                        <li>Failed one-time recordings</li>
+                        <li>Past instances from recurring recordings</li>
+                        <li>Cancelled or missed recordings</li>
+                    </ul>
+                    <p class="mt-2 text-xs text-gray-600">
+                        <strong>Note:</strong> Recurring recording patterns are preserved.
+                    </p>
+                </div>
+
+                <div class="flex justify-end space-x-3 pt-4 border-t">
+                    <button onclick="closeCleanupModal()" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">
+                        Cancel
+                    </button>
+                    <button onclick="previewCleanup()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                        Preview
+                    </button>
+                </div>
+            </div>
+
+            <div id="cleanup-step-2" class="hidden space-y-4">
+                <div class="bg-yellow-50 border border-yellow-200 rounded p-4">
+                    <p class="font-semibold text-yellow-900 mb-2">Deletion Preview</p>
+                    <div class="text-sm space-y-1">
+                        <p>Cutoff date: <strong id="preview-cutoff-date"></strong></p>
+                        <p>One-time jobs to delete: <strong id="preview-jobs-count"></strong></p>
+                        <p>Recording instances to delete: <strong id="preview-instances-count"></strong></p>
+                        <p class="pt-2 border-t border-yellow-300">
+                            Total entries: <strong id="preview-total-count" class="text-lg"></strong>
+                        </p>
+                    </div>
+                </div>
+
+                <p class="text-red-600 font-semibold text-sm">
+                    ⚠️ This action cannot be undone!
+                </p>
+
+                <div class="flex justify-end space-x-3 pt-4 border-t">
+                    <button onclick="backToStep1()" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">
+                        Back
+                    </button>
+                    <button onclick="executeCleanup()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">
+                        Delete Now
+                    </button>
+                </div>
+            </div>
+
+            <div id="cleanup-step-3" class="hidden space-y-4">
+                <div class="text-center">
+                    <div class="text-green-600 text-5xl mb-3">✓</div>
+                    <h4 class="text-lg font-semibold mb-2">Cleanup Complete</h4>
+                    <div class="text-sm space-y-1 text-gray-700">
+                        <p>Deleted <strong id="result-jobs-count"></strong> one-time jobs</p>
+                        <p>Deleted <strong id="result-instances-count"></strong> recording instances</p>
+                    </div>
+                </div>
+
+                <div class="flex justify-center pt-4 border-t">
+                    <button onclick="closeCleanupModal(); location.reload();" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded">
+                        Done
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1339,6 +1448,86 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // Database Cleanup Functions
+        function openCleanupModal() {
+            document.getElementById('cleanup-modal').classList.remove('hidden');
+            document.getElementById('cleanup-step-1').classList.remove('hidden');
+            document.getElementById('cleanup-step-2').classList.add('hidden');
+            document.getElementById('cleanup-step-3').classList.add('hidden');
+        }
+
+        function closeCleanupModal() {
+            document.getElementById('cleanup-modal').classList.add('hidden');
+        }
+
+        async function previewCleanup() {
+            const monthsOld = parseInt(document.getElementById('cleanup-months').value);
+
+            try {
+                const response = await fetch('/api/schedule/cleanup/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ months_old: monthsOld })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert('Error: ' + (data.error || 'Preview failed'));
+                    return;
+                }
+
+                // Populate preview
+                document.getElementById('preview-cutoff-date').textContent = data.preview.cutoff_date;
+                document.getElementById('preview-jobs-count').textContent = data.preview.jobs_count;
+                document.getElementById('preview-instances-count').textContent = data.preview.instances_count;
+                document.getElementById('preview-total-count').textContent = data.preview.total_count;
+
+                // Show step 2
+                document.getElementById('cleanup-step-1').classList.add('hidden');
+                document.getElementById('cleanup-step-2').classList.remove('hidden');
+            } catch (error) {
+                alert('Error fetching preview: ' + error);
+            }
+        }
+
+        function backToStep1() {
+            document.getElementById('cleanup-step-2').classList.add('hidden');
+            document.getElementById('cleanup-step-1').classList.remove('hidden');
+        }
+
+        async function executeCleanup() {
+            const monthsOld = parseInt(document.getElementById('cleanup-months').value);
+
+            try {
+                const response = await fetch('/api/schedule/cleanup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        months_old: monthsOld,
+                        confirm: true
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert('Error: ' + (data.error || 'Cleanup failed'));
+                    return;
+                }
+
+                // Show results
+                document.getElementById('result-jobs-count').textContent = data.jobs_deleted;
+                document.getElementById('result-instances-count').textContent = data.instances_deleted;
+
+                // Show step 3
+                document.getElementById('cleanup-step-2').classList.add('hidden');
+                document.getElementById('cleanup-step-3').classList.remove('hidden');
+            } catch (error) {
+                alert('Error executing cleanup: ' + error);
+            }
         }
     </script>
 </body>

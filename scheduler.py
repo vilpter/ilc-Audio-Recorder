@@ -564,6 +564,141 @@ def delete_job(job_id):
         (job_id,), commit=True)
 
 
+def cleanup_old_records(months_old, include_completed=True, include_failed=True,
+                       include_instances=True, include_cancelled=True):
+    """
+    Clean up old recording entries beyond retention period.
+
+    Args:
+        months_old: Number of months old to retain (delete older than this)
+        include_completed: Delete completed one-time jobs
+        include_failed: Delete failed one-time jobs
+        include_instances: Delete recording instances from recurring jobs
+        include_cancelled: Delete cancelled/missed entries
+
+    Returns:
+        Dictionary with counts: {
+            'jobs_deleted': int,
+            'instances_deleted': int,
+            'errors': []
+        }
+    """
+    from datetime import datetime, timedelta
+
+    # Calculate cutoff date
+    cutoff_date = (datetime.now() - timedelta(days=months_old * 30)).date().isoformat()
+
+    deleted_jobs = []
+    instances_deleted_count = 0
+
+    def _cleanup_transaction(conn, cursor):
+        nonlocal instances_deleted_count
+
+        # 1. Delete old instances from recurring jobs
+        if include_instances:
+            cursor.execute('''
+                DELETE FROM recording_instances
+                WHERE occurrence_date < ?
+                AND (status = 'completed' OR status = 'failed' OR status = 'missed')
+            ''', (cutoff_date,))
+            instances_deleted_count = cursor.rowcount
+
+        # 2. Build conditions for one-time jobs
+        conditions = []
+        if include_completed:
+            conditions.append("status = 'completed'")
+        if include_failed:
+            conditions.append("status = 'failed'")
+        if include_cancelled:
+            conditions.append("status IN ('cancelled', 'missed')")
+
+        if conditions:
+            where_clause = ' OR '.join(conditions)
+
+            # Get job IDs first for scheduler removal
+            cursor.execute(f'''
+                SELECT id FROM scheduled_jobs
+                WHERE is_recurring = 0
+                AND start_time < ?
+                AND ({where_clause})
+            ''', (cutoff_date,))
+
+            job_ids = [row[0] for row in cursor.fetchall()]
+
+            # Remove from scheduler
+            for job_id in job_ids:
+                try:
+                    scheduler.remove_job(job_id)
+                except:
+                    pass  # Job may not be in scheduler
+
+            # Delete from database
+            cursor.execute(f'''
+                DELETE FROM scheduled_jobs
+                WHERE is_recurring = 0
+                AND start_time < ?
+                AND ({where_clause})
+            ''', (cutoff_date,))
+
+            deleted_jobs.extend(job_ids)
+
+    try:
+        db_utils.execute_transaction(DB_PATH, _cleanup_transaction)
+
+        return {
+            'success': True,
+            'jobs_deleted': len(deleted_jobs),
+            'instances_deleted': instances_deleted_count,
+            'cutoff_date': cutoff_date,
+            'errors': []
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'jobs_deleted': 0,
+            'instances_deleted': 0,
+            'cutoff_date': cutoff_date,
+            'errors': [str(e)]
+        }
+
+
+def get_cleanup_preview(months_old):
+    """
+    Preview what would be deleted without actually deleting.
+
+    Args:
+        months_old: Number of months old to retain
+
+    Returns:
+        Dictionary with counts of what will be deleted
+    """
+    from datetime import datetime, timedelta
+
+    cutoff_date = (datetime.now() - timedelta(days=months_old * 30)).date().isoformat()
+
+    # Count instances
+    instances = db_utils.fetch_one(DB_PATH, '''
+        SELECT COUNT(*) FROM recording_instances
+        WHERE occurrence_date < ?
+        AND (status = 'completed' OR status = 'failed' OR status = 'missed')
+    ''', (cutoff_date,))
+
+    # Count one-time jobs
+    jobs = db_utils.fetch_one(DB_PATH, '''
+        SELECT COUNT(*) FROM scheduled_jobs
+        WHERE is_recurring = 0
+        AND start_time < ?
+        AND (status = 'completed' OR status = 'failed' OR status IN ('cancelled', 'missed'))
+    ''', (cutoff_date,))
+
+    return {
+        'cutoff_date': cutoff_date,
+        'instances_count': instances[0] if instances else 0,
+        'jobs_count': jobs[0] if jobs else 0,
+        'total_count': (instances[0] if instances else 0) + (jobs[0] if jobs else 0)
+    }
+
+
 def update_job(job_id, start_time=None, duration=None, name=None, notes=None,
                is_recurring=None, recurrence_pattern=None, allow_override=None,
                capture_video=None):

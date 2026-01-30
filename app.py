@@ -507,6 +507,55 @@ def get_occurrence_instance(job_id, occurrence_date):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/schedule/cleanup/preview', methods=['POST'])
+@login_required
+def preview_cleanup():
+    """Preview database cleanup without executing"""
+    data = request.json or {}
+    months_old = data.get('months_old', 6)
+
+    # Validate input
+    if not isinstance(months_old, int) or months_old < 1 or months_old > 120:
+        return jsonify({'error': 'Invalid months_old value (must be 1-120)'}), 400
+
+    try:
+        preview = scheduler.get_cleanup_preview(months_old)
+        return jsonify({
+            'success': True,
+            'preview': preview
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/schedule/cleanup', methods=['POST'])
+@login_required
+def execute_cleanup():
+    """Execute database cleanup"""
+    data = request.json or {}
+    months_old = data.get('months_old', 6)
+    confirm = data.get('confirm', False)
+
+    # Validate input
+    if not isinstance(months_old, int) or months_old < 1 or months_old > 120:
+        return jsonify({'error': 'Invalid months_old value (must be 1-120)'}), 400
+
+    if not confirm:
+        return jsonify({'error': 'Confirmation required'}), 400
+
+    try:
+        result = scheduler.cleanup_old_records(
+            months_old=months_old,
+            include_completed=True,
+            include_failed=True,
+            include_instances=True,
+            include_cancelled=True
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/recordings')
 @login_required
 def recordings_page():
