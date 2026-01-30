@@ -724,6 +724,156 @@ def save_storage_config():
     return jsonify({'success': True})
 
 
+# Directory Browser API Endpoints
+@app.route('/api/directories/list', methods=['POST'])
+@login_required
+def list_directories():
+    """
+    List directories at a given path for the directory browser.
+    Returns only directories (not files), excluding hidden folders.
+    """
+    import os
+    from pathlib import Path
+
+    data = request.get_json()
+    requested_path = data.get('path', '/')
+
+    # Validate path using existing validation
+    valid, error, validated_path = validate_path(requested_path, "Path", allow_relative=False)
+    if not valid:
+        return jsonify({'success': False, 'error': error}), 400
+
+    try:
+        # Resolve path to prevent traversal attacks
+        path_obj = Path(validated_path).resolve()
+
+        # Check if path exists and is a directory
+        if not path_obj.exists():
+            return jsonify({'success': False, 'error': 'Directory does not exist'}), 404
+
+        if not path_obj.is_dir():
+            return jsonify({'success': False, 'error': 'Path is not a directory'}), 400
+
+        # Get parent path (None if at root)
+        parent_path = str(path_obj.parent) if path_obj.parent != path_obj else None
+
+        # List directories only, excluding hidden folders
+        directories = []
+        try:
+            for entry in sorted(path_obj.iterdir()):
+                # Skip hidden folders (starting with .)
+                if entry.name.startswith('.'):
+                    continue
+
+                # Only include directories
+                if entry.is_dir():
+                    # Check if directory is writable
+                    is_writable = os.access(str(entry), os.W_OK)
+
+                    directories.append({
+                        'name': entry.name,
+                        'path': str(entry),
+                        'writable': is_writable
+                    })
+        except PermissionError:
+            return jsonify({
+                'success': False,
+                'error': 'Permission denied: Cannot read directory contents'
+            }), 403
+
+        return jsonify({
+            'success': True,
+            'current_path': str(path_obj),
+            'parent_path': parent_path,
+            'directories': directories
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error listing directories: {str(e)}")
+        return jsonify({'success': False, 'error': f'Failed to list directories: {str(e)}'}), 500
+
+
+@app.route('/api/directories/create', methods=['POST'])
+@login_required
+def create_directory():
+    """
+    Create a new directory within a parent path.
+    Validates folder name and checks permissions.
+    """
+    import os
+    from pathlib import Path
+    import re
+
+    data = request.get_json()
+    parent_path = data.get('parent_path')
+    folder_name = data.get('folder_name')
+
+    # Validate required parameters
+    if not parent_path or not folder_name:
+        return jsonify({'success': False, 'error': 'parent_path and folder_name are required'}), 400
+
+    # Validate parent path
+    valid, error, validated_parent = validate_path(parent_path, "Parent path", allow_relative=False)
+    if not valid:
+        return jsonify({'success': False, 'error': error}), 400
+
+    # Validate folder name - alphanumeric, underscore, hyphen only
+    folder_name_pattern = r'^[a-zA-Z0-9_\-]+$'
+    if not re.match(folder_name_pattern, folder_name):
+        return jsonify({
+            'success': False,
+            'error': 'Folder name can only contain letters, numbers, underscores, and hyphens'
+        }), 400
+
+    # Reject names starting with . or containing path separators
+    if folder_name.startswith('.') or '/' in folder_name or '\\' in folder_name:
+        return jsonify({
+            'success': False,
+            'error': 'Invalid folder name: cannot start with . or contain path separators'
+        }), 400
+
+    try:
+        # Resolve parent path to prevent traversal
+        parent_obj = Path(validated_parent).resolve()
+
+        # Check if parent exists and is a directory
+        if not parent_obj.exists():
+            return jsonify({'success': False, 'error': 'Parent directory does not exist'}), 404
+
+        if not parent_obj.is_dir():
+            return jsonify({'success': False, 'error': 'Parent path is not a directory'}), 400
+
+        # Check if parent is writable
+        if not os.access(str(parent_obj), os.W_OK):
+            return jsonify({'success': False, 'error': 'Parent directory is not writable'}), 403
+
+        # Construct new directory path
+        new_dir_path = parent_obj / folder_name
+
+        # Check if directory already exists
+        if new_dir_path.exists():
+            return jsonify({'success': False, 'error': 'Directory already exists'}), 409
+
+        # Create the directory
+        new_dir_path.mkdir(mode=0o755, parents=False)
+
+        # Log the creation
+        username = session.get('username', 'unknown')
+        app.logger.info(f"Directory created by {username}: {str(new_dir_path)}")
+
+        return jsonify({
+            'success': True,
+            'path': str(new_dir_path),
+            'name': folder_name
+        })
+
+    except PermissionError:
+        return jsonify({'success': False, 'error': 'Permission denied: Cannot create directory'}), 403
+    except Exception as e:
+        app.logger.error(f"Error creating directory: {str(e)}")
+        return jsonify({'success': False, 'error': f'Failed to create directory: {str(e)}'}), 500
+
+
 # Calendar View Route (also accessible via /calendar for backwards compatibility)
 @app.route('/calendar')
 @login_required

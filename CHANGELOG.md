@@ -2,6 +2,20 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.5.5] - 2026-01-29
+
+### Added
+- **Directory Browser for Storage Path** - Visual navigation and folder creation in Settings
+  - New "Browse..." button next to storage path input field
+  - Modal dialog for browsing server directories with breadcrumb navigation
+  - Create new folders directly from browser interface
+  - Hidden folders (starting with `.`) automatically filtered
+  - Read-only indicators for directories without write permissions
+  - Backend API endpoints: `/api/directories/list` and `/api/directories/create`
+  - Path traversal protection and security validation
+
+---
+
 ## [1.5.4] - 2026-01-26
 
 ### Added

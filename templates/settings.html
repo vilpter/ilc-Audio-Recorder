@@ -87,8 +87,14 @@
 
                 <div class="mb-4">
                     <label class="block text-gray-700 mb-2">Storage Path</label>
-                    <input type="text" id="storage-path" placeholder="/mnt/usb_recorder"
-                        class="w-full md:w-2/3 border border-gray-300 rounded px-3 py-2">
+                    <div class="flex gap-2">
+                        <input type="text" id="storage-path" placeholder="/mnt/usb_recorder"
+                            class="flex-1 border border-gray-300 rounded px-3 py-2">
+                        <button onclick="openDirectoryBrowser()"
+                            class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-4 py-2 rounded whitespace-nowrap">
+                            Browse...
+                        </button>
+                    </div>
                     <p class="text-xs text-gray-500 mt-1">Default: /mnt/usb_recorder</p>
                 </div>
 
@@ -328,6 +334,69 @@
             <div class="mt-2 text-sm text-gray-600 flex flex-col sm:flex-row sm:justify-between gap-1">
                 <span id="log-info">Showing last 100 lines</span>
                 <span class="text-gray-400 text-xs">Timestamps are in local time</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Directory Browser Modal -->
+    <div id="directory-browser-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+        <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-6 border-b">
+                <h2 class="text-xl font-semibold text-gray-800">Browse Directories</h2>
+                <button onclick="closeDirectoryBrowser()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 overflow-y-auto flex-1">
+                <!-- Current Path Display -->
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Current Path</label>
+                    <input type="text" id="browser-current-path" readonly
+                        class="w-full border border-gray-300 rounded px-3 py-2 bg-gray-50 text-gray-700">
+                </div>
+
+                <!-- Breadcrumb Navigation -->
+                <div id="browser-breadcrumbs" class="mb-4 flex flex-wrap items-center gap-1 text-sm">
+                    <!-- Breadcrumbs will be inserted here by JavaScript -->
+                </div>
+
+                <!-- Directory Listing -->
+                <div class="mb-6">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-2">Directories</h3>
+                    <div id="directory-list" class="border border-gray-300 rounded overflow-y-auto bg-white"
+                        style="max-height: 400px;">
+                        <div class="p-4 text-gray-500 text-center">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Create New Folder Section -->
+                <div class="border-t pt-4">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-2">Create New Folder</h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="new-folder-name" placeholder="Folder name"
+                            class="flex-1 border border-gray-300 rounded px-3 py-2">
+                        <button onclick="createNewFolder()"
+                            class="bg-green-500 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded whitespace-nowrap">
+                            Create Folder
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Only letters, numbers, underscores, and hyphens allowed</p>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="flex justify-end gap-3 p-6 border-t">
+                <button onclick="closeDirectoryBrowser()"
+                    class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold px-4 py-2 rounded">
+                    Cancel
+                </button>
+                <button onclick="selectCurrentDirectory()"
+                    class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded">
+                    Select This Directory
+                </button>
             </div>
         </div>
     </div>
@@ -1053,6 +1122,223 @@
                 }
                 return false;
             }
+        }
+
+        // ============================================================
+        // Directory Browser Functions
+        // ============================================================
+
+        // State variable for current browser path
+        let currentBrowserPath = '/';
+
+        /**
+         * Open the directory browser modal
+         * Initialize from current input value or default to '/'
+         */
+        function openDirectoryBrowser() {
+            const modal = document.getElementById('directory-browser-modal');
+            const currentPath = document.getElementById('storage-path').value.trim() || '/';
+
+            // Show modal
+            modal.classList.remove('hidden');
+
+            // Load initial directory
+            loadDirectoryContents(currentPath);
+        }
+
+        /**
+         * Close the directory browser modal
+         * Clear the new folder input
+         */
+        function closeDirectoryBrowser() {
+            const modal = document.getElementById('directory-browser-modal');
+            modal.classList.add('hidden');
+
+            // Clear new folder input
+            document.getElementById('new-folder-name').value = '';
+        }
+
+        /**
+         * Select the current directory and update the storage-path input
+         */
+        function selectCurrentDirectory() {
+            const storagePathInput = document.getElementById('storage-path');
+            storagePathInput.value = currentBrowserPath;
+            closeDirectoryBrowser();
+        }
+
+        /**
+         * Load directory contents from the API
+         * @param {string} path - Path to load
+         */
+        async function loadDirectoryContents(path) {
+            const directoryList = document.getElementById('directory-list');
+
+            // Show loading state
+            directoryList.innerHTML = '<div class="p-4 text-gray-500 text-center">Loading...</div>';
+
+            try {
+                const response = await fetch('/api/directories/list', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentBrowserPath = result.current_path;
+                    updateBrowserUI(result);
+                } else {
+                    directoryList.innerHTML = `<div class="p-4 text-red-600 text-center">Error: ${escapeHtml(result.error)}</div>`;
+                }
+            } catch (error) {
+                directoryList.innerHTML = `<div class="p-4 text-red-600 text-center">Error loading directories: ${escapeHtml(error.toString())}</div>`;
+            }
+        }
+
+        /**
+         * Update the browser UI with directory data
+         * @param {Object} data - API response data
+         */
+        function updateBrowserUI(data) {
+            const directoryList = document.getElementById('directory-list');
+            const currentPathInput = document.getElementById('browser-current-path');
+
+            // Update current path display
+            currentPathInput.value = data.current_path;
+
+            // Update breadcrumbs
+            updateBreadcrumbs(data.current_path);
+
+            // Build directory list HTML
+            let html = '';
+
+            // Add parent directory link if not at root
+            if (data.parent_path) {
+                html += `
+                    <div class="px-4 py-3 hover:bg-gray-100 cursor-pointer border-b flex items-center gap-2"
+                        onclick="loadDirectoryContents('${escapeHtml(data.parent_path)}')">
+                        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        <span class="font-semibold text-gray-700">..</span>
+                        <span class="text-sm text-gray-500">(Parent Directory)</span>
+                    </div>
+                `;
+            }
+
+            // Add directories
+            if (data.directories.length === 0) {
+                if (!data.parent_path) {
+                    html = '<div class="p-4 text-gray-500 text-center">No directories found</div>';
+                }
+            } else {
+                data.directories.forEach(dir => {
+                    const writableIndicator = dir.writable ? '' : '<span class="text-xs text-red-500">(read-only)</span>';
+                    html += `
+                        <div class="px-4 py-3 hover:bg-gray-100 cursor-pointer border-b flex items-center gap-2"
+                            onclick="loadDirectoryContents('${escapeHtml(dir.path)}')">
+                            <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                            </svg>
+                            <span class="text-gray-800">${escapeHtml(dir.name)}</span>
+                            ${writableIndicator}
+                        </div>
+                    `;
+                });
+            }
+
+            directoryList.innerHTML = html;
+        }
+
+        /**
+         * Update breadcrumb navigation
+         * @param {string} path - Current path
+         */
+        function updateBreadcrumbs(path) {
+            const breadcrumbsContainer = document.getElementById('browser-breadcrumbs');
+
+            // Split path into segments
+            const segments = path.split('/').filter(s => s.length > 0);
+
+            let html = `
+                <button onclick="loadDirectoryContents('/')"
+                    class="px-2 py-1 rounded hover:bg-gray-200 text-blue-600 font-semibold">
+                    /
+                </button>
+            `;
+
+            let currentPath = '';
+            segments.forEach((segment, index) => {
+                currentPath += '/' + segment;
+                const pathForClick = currentPath;
+
+                html += `
+                    <span class="text-gray-400">/</span>
+                    <button onclick="loadDirectoryContents('${escapeHtml(pathForClick)}')"
+                        class="px-2 py-1 rounded hover:bg-gray-200 text-blue-600">
+                        ${escapeHtml(segment)}
+                    </button>
+                `;
+            });
+
+            breadcrumbsContainer.innerHTML = html;
+        }
+
+        /**
+         * Create a new folder in the current directory
+         */
+        async function createNewFolder() {
+            const folderNameInput = document.getElementById('new-folder-name');
+            const folderName = folderNameInput.value.trim();
+
+            if (!folderName) {
+                alert('Please enter a folder name');
+                return;
+            }
+
+            // Validate folder name on client side
+            const validPattern = /^[a-zA-Z0-9_\-]+$/;
+            if (!validPattern.test(folderName)) {
+                alert('Folder name can only contain letters, numbers, underscores, and hyphens');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/directories/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        parent_path: currentBrowserPath,
+                        folder_name: folderName
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Folder created successfully: ' + result.name);
+                    folderNameInput.value = '';
+                    // Reload directory to show new folder
+                    loadDirectoryContents(currentBrowserPath);
+                } else {
+                    alert('Error creating folder: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error creating folder: ' + error);
+            }
+        }
+
+        /**
+         * HTML escape utility function for safe rendering
+         * @param {string} text - Text to escape
+         * @returns {string} - Escaped text
+         */
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
     </script>
 </body>

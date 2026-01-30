@@ -36,6 +36,7 @@ A professional-grade dual-channel audio and video recording system with web-base
 - New/In Progress page for unified recording controls
 - Recordings page with audio and video file browser
 - Settings page with audio and camera configuration
+- Visual directory browser for storage path selection with folder creation
 - Visual calendar with color-coded events
 - Live date/time display on all pages
 - Disk space monitoring in navigation ribbon
@@ -435,25 +436,29 @@ On first access, you'll be prompted to create an admin account:
 - Credentials stored with secure password hashing (Werkzeug)
 - Session secret key auto-generated and stored in `~/.audio-recorder/`
 
-## Changelog
+## Changelog (full details in CHANGELOG.md)
 
-### v1.5.0 (Current)
+### v1.6.0 (Current)
+- Added sticky navigation bar that remains visible while scrolling
+- Implemented template inheritance for cleaner HTML structure and better maintainability
+- Fixed recurring schedule database serialization issue
+
+### v1.5.0
 - Rebranded from "Audio Recorder" to "Church Recording"
 - Renamed Calendar page to "Schedule" - calendar-based scheduling
 - Renamed Camera page to "New/In Progress" - unified recording controls
-- Added Audio Only, Video Only, and Both recording buttons
-- Added combined audio/video status panel
+- Unified recording and status controls for Audio/Video
 - Added mobile page indicator
 - Removed standalone Schedule page (consolidated into calendar modal)
 - Moved Quick Record from Settings to New/In Progress page
 
 ### v1.4.0
 - Added PTZOptics camera integration for synchronized A/V recording
-- RTSP stream capture with zero CPU re-encoding (`-c copy`)
-- Hardware-accelerated transcoding using Raspberry Pi GPU
+- RTSP stream capture with zero CPU (hardware-accelerated) re-encoding (`-c copy`)
+- Real-time transcode progress tracking
 - USB storage support for video files
 - Video capture checkbox in Schedule page
-- Real-time transcode progress tracking
+- Camera settings page with preset naming
 - Live stream viewing with copyable URLs
 
 ### v1.3.0
@@ -466,49 +471,12 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 ## Roadmap
 
 ### Planned Features
-- Make top ribbon sticky when scrolling.  Evaluate whether webpage structural changes would be best practice to implement this, but recommend what to do before implementing.
-- Update desktop html to use hamburger menu the same as the mobile display
-- Add support for multiple user accounts
-- In Controls, add an indication of any other users who are currently logged in.
-- Audio post-processing (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate
-- Note the last date of download for files
 - Audio file analysis (silence detection, dB level analysis) using `audio_analyzer.py`
-- Develop a database clean-up selection button that would be displayed on the Schedule page.  Selecting the button should provide the user an option to select a number of months of past schedule to retain and delete prior schedule entries.
-
-### Recently Completed (v1.5.4)
-- Recording instances table for tracking individual occurrences of recurring recordings
-- Calendar now shows accurate status and timing for each recurring recording occurrence
-- Automatic instance repair when viewing past recurring events
-- Simplified recurring schedule creation (auto-populates day/date from calendar selection)
-- Day of week display added to date selection in Create New Recording modal
-
-### Previously Completed (v1.5.1/v1.5.2/v1.5.3)
-- Enhanced diagnostic logging with dedicated log files (recorder, scheduler, FFmpeg)
-- Log viewer shows file path and supports all log types
-- System state logging at recording start (environment variables, ALSA mixer state)
-- 60-second heartbeat logging during recordings
-- FFmpeg stderr capture for debugging silent recording issues
-- New troubleshooting script (`troubleshoot_audio.sh`) for diagnosing scheduled recordings
-- Local timezone timestamps in all logs
-- Renamed "New/In Progress" to "Control" in navigation
-- Added A/A&V indicators to calendar for audio vs audio+video recordings
-- Renamed "Recording Filename Configuration" to "Audio Filename Nomenclature"
-- Simplified "Also capture video" label in Edit Recording popup
-- Consolidated documentation (new ARCHITECTURE.md, removed obsolete docs/)
-- Consolidated storage location for audio and video recordings
-
-### Previously Completed (v1.5.0)
-- Unified recording controls (Audio/Video/Both)
-- Combined status panel for audio and video
-- Simplified navigation and workflow
-- Mobile-friendly page indicators
-
-### Previously Completed (v1.4.0)
-- PTZOptics camera integration with video recording
-- RTSP stream capture with hardware-accelerated transcoding
-- Video capture option for scheduled recordings
-- Camera settings page with preset naming
-- Live stream URLs for external players
+- Add configurable audio post-processing (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate
+- Add support for multiple user accounts
+- In Controls, add an indication of any other users who are currently logged in
+- Note the last date of download for files
+- Develop a database clean-up selection button that would be displayed on the Schedule page. Selecting the button should provide the user an option to select a number of months of past schedule to retain and delete prior schedule entries
 
 ## Built With
 
@@ -524,5 +492,5 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
 ---
 
-**Version:** 1.5.3
-**Last Updated:** 2026-01-25
+**Version:** 1.6.0
+**Last Updated:** 2026-01-26
