@@ -2,6 +2,36 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.7.3] - 2026-02-01
+
+### Fixed
+- **Audio Analysis Not Storing Results** - Fixed critical bug where audio file analysis data was never saved to the database
+  - Root cause: Code called non-existent `db_utils.execute()` function instead of `db_utils.execute_query()`
+  - Analysis would silently fail, causing tooltips to always show "Analysis not available yet"
+  - Both successful analysis storage and failure status recording now work correctly
+- **Batch Analysis Suffix Matching** - Fixed `analyze_unanalyzed_recordings()` to use configured channel suffixes
+  - Previously hardcoded to look for `_L` and `_R` suffixes
+  - Now reads actual configured suffixes from database via `load_channel_suffixes()`
+
+### Technical
+- Changed `db_utils.execute()` to `db_utils.execute_query(..., commit=True)` in `_analyze_recording_delayed()`
+- Updated suffix pattern matching to use dynamic `left_pattern` and `right_pattern` variables
+
+---
+
+## [1.7.2] - 2026-02-01
+
+### Fixed
+- **Recurring Scheduled Recordings Not Triggering** - Fixed bug where recurring jobs were not restored to the scheduler after service restart
+  - Root cause: `get_pending_jobs()` query filtered by `start_time > now()`, which excluded recurring jobs whose original creation date had passed
+  - Recurring jobs now correctly restore regardless of their original `start_time`
+  - One-time jobs continue to be filtered by future `start_time` as expected
+
+### Technical
+- Modified SQL query in `get_pending_jobs()` to use `(is_recurring = 1 OR start_time > ?)` instead of just `start_time > ?`
+
+---
+
 ## [1.7.1] - 2026-01-29
 
 ### Added

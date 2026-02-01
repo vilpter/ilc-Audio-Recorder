@@ -442,7 +442,11 @@ On first access, you'll be prompted to create an admin account:
 
 ## Changelog (full details in CHANGELOG.md)
 
-### v1.7.1 (Current)
+### v1.7.3 (Current)
+- Fixed audio analysis not storing results to database
+- Fixed batch analysis suffix matching to use configured channel suffixes
+
+### v1.7.1
 - Database clean-up tool in Settings page
 - Remove old completed, failed, cancelled, or missed recording entries
 - Configurable retention period (1, 3, 6, 12, 24 months)
@@ -508,5 +512,5 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
 ---
 
-**Version:** 1.7.1
-**Last Updated:** 2026-01-29
+**Version:** 1.7.3
+**Last Updated:** 2026-02-01

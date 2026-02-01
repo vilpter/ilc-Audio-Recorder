@@ -826,10 +826,14 @@ def get_all_jobs():
 
 
 def get_pending_jobs():
-    """Get only pending (not yet executed) jobs"""
+    """Get only pending (not yet executed) jobs
+
+    For recurring jobs: Always return them regardless of start_time
+    For one-time jobs: Only return if start_time is in the future
+    """
     rows = db_utils.fetch_all(DB_PATH, '''
         SELECT * FROM scheduled_jobs
-        WHERE status = 'pending' AND start_time > ?
+        WHERE status = 'pending' AND (is_recurring = 1 OR start_time > ?)
         ORDER BY start_time
     ''', (datetime.now().isoformat(),), row_factory=sqlite3.Row)
 

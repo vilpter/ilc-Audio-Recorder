@@ -497,7 +497,7 @@ def _analyze_recording_delayed(source_a, source_b, job_timestamp):
 
             # Store in database
             from scheduler import DB_PATH
-            db_utils.execute(DB_PATH, '''
+            db_utils.execute_query(DB_PATH, '''
                 INSERT OR REPLACE INTO audio_analysis
                 (filename, channel, analyzed_at, total_duration, non_silent_percentage,
                  mean_db, max_db, max_db_time, status)
@@ -512,7 +512,7 @@ def _analyze_recording_delayed(source_a, source_b, job_timestamp):
                 channel_stats['max_db'],
                 channel_stats['max_db_time'],
                 'completed'
-            ))
+            ), commit=True)
 
             logger.info(f"Analysis completed for {filepath.name}: "
                        f"{channel_stats['non_silent_percentage']:.1f}% non-silent, "
@@ -523,12 +523,12 @@ def _analyze_recording_delayed(source_a, source_b, job_timestamp):
             # Store failure status
             try:
                 from scheduler import DB_PATH
-                db_utils.execute(DB_PATH, '''
+                db_utils.execute_query(DB_PATH, '''
                     INSERT OR REPLACE INTO audio_analysis
                     (filename, channel, analyzed_at, status, error_message)
                     VALUES (?, ?, ?, ?, ?)
                 ''', (filepath.name, channel_name, datetime.now().isoformat(),
-                     'failed', str(e)))
+                     'failed', str(e)), commit=True)
             except:
                 pass
 
@@ -570,16 +570,21 @@ def analyze_unanalyzed_recordings():
     if unanalyzed:
         logger.info(f"Found {len(unanalyzed)} unanalyzed recordings")
 
+        # Load configured channel suffixes
+        left_suffix, right_suffix = load_channel_suffixes()
+        left_pattern = f'_{left_suffix}'
+        right_pattern = f'_{right_suffix}'
+
         # Group by pairs (left/right)
         pairs = {}
         for filepath in unanalyzed:
-            # Extract base timestamp (remove _L or _R suffix)
+            # Extract base timestamp (remove configured suffix)
             name = filepath.stem
-            if name.endswith('_L'):
-                base = name[:-2]
+            if name.endswith(left_pattern):
+                base = name[:-len(left_pattern)]
                 pairs.setdefault(base, {})['left'] = filepath
-            elif name.endswith('_R'):
-                base = name[:-2]
+            elif name.endswith(right_pattern):
+                base = name[:-len(right_pattern)]
                 pairs.setdefault(base, {})['right'] = filepath
 
         # Analyze pairs in background
