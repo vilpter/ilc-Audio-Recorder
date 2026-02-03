@@ -2,6 +2,21 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.7.5] - 2026-02-02
+
+### Fixed
+- **Audio Analysis Modal Error for Silent Recordings** - Fixed "Failed to load analysis" error when viewing recordings with complete silence
+  - Root cause: FFmpeg returns `-Inf` dB values for silent audio, which is not valid JSON
+  - API now sanitizes infinity values to `null` before JSON serialization
+  - JavaScript display gracefully handles null dB values, showing "N/A" instead of crashing
+
+### Technical
+- Added `import math` for infinity checking
+- Added `sanitize_db_value()` helper function in analysis API endpoint
+- Updated JavaScript template to handle null values for `mean_db` and `max_db` fields
+
+---
+
 ## [1.7.4] - 2026-02-02
 
 ### Added

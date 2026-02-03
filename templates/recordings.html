@@ -480,12 +480,12 @@
 
                             <div>
                                 <div class="text-gray-600 text-sm">Mean dB</div>
-                                <div class="font-medium text-gray-900">${ch.mean_db.toFixed(1)} dB</div>
+                                <div class="font-medium text-gray-900">${ch.mean_db !== null ? ch.mean_db.toFixed(1) + " dB" : "N/A"}</div>
                             </div>
 
                             <div>
                                 <div class="text-gray-600 text-sm">Max dB</div>
-                                <div class="font-medium text-gray-900">${ch.max_db.toFixed(1)} dB</div>
+                                <div class="font-medium text-gray-900">${ch.max_db !== null ? ch.max_db.toFixed(1) + " dB" : "N/A"}</div>
                             </div>
 
                             <div class="col-span-2">

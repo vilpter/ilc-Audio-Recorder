@@ -8,6 +8,7 @@ from flask import Flask, render_template, jsonify, request, send_file, redirect,
 from flask_login import login_required, login_user, logout_user, current_user
 from pathlib import Path
 import json
+import math
 import os
 import subprocess
 import sqlite3
@@ -19,7 +20,7 @@ import auth
 import db_utils
 import validation
 
-__version__ = '1.7.4'
+__version__ = '1.7.5'
 
 app = Flask(__name__)
 
@@ -629,14 +630,20 @@ def get_file_analysis(filename):
             'channels': []
         }
 
+        def sanitize_db_value(val):
+            """Convert -inf/inf to None for JSON compatibility"""
+            if val is None or (isinstance(val, float) and math.isinf(val)):
+                return None
+            return val
+
         for row in results:
             channel_data = {
                 'channel': row[0],  # 'left' or 'right'
                 'analyzed_at': row[1],
                 'total_duration': row[2],
                 'non_silent_percentage': row[3],
-                'mean_db': row[4],
-                'max_db': row[5],
+                'mean_db': sanitize_db_value(row[4]),
+                'max_db': sanitize_db_value(row[5]),
                 'max_db_time': row[6],
                 'status': row[7],
                 'error_message': row[8]
