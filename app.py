@@ -19,6 +19,8 @@ import auth
 import db_utils
 import validation
 
+__version__ = '1.7.4'
+
 app = Flask(__name__)
 
 # Session configuration
@@ -982,7 +984,7 @@ def settings_page():
     """System settings interface"""
     # Get current audio device config
     audio_device = scheduler.get_system_config('audio_device', 'auto')
-    return render_template('settings.html', current_device=audio_device)
+    return render_template('settings.html', current_device=audio_device, version=__version__)
 
 
 # Audio Device Configuration API

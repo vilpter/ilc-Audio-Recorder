@@ -6,6 +6,13 @@
 
 {% block content %}
     <div class="container mx-auto p-6">
+        <!-- Version Display -->
+        <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded">
+            <p class="text-gray-700 text-sm">
+                <strong class="text-blue-700">System Version:</strong> v{{ version }}
+            </p>
+        </div>
+
         <!-- Audio Device Configuration -->
         <div class="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 class="text-xl font-semibold mb-4">Audio Device Configuration</h2>

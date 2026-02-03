@@ -2,6 +2,29 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.7.4] - 2026-02-02
+
+### Added
+- **Version Display in Settings** - System version now displayed at top of Settings page
+  - Prominent blue banner showing current version number
+  - Easy reference for troubleshooting and support
+
+### Changed
+- **Audio Analysis Display Improvement** - Converted hover tooltip to click-based modal popup
+  - Filenames in Recordings page are now clickable links instead of hover-activated tooltips
+  - Analysis data displays in a full modal window similar to calendar scheduling interface
+  - Better readability with larger fonts and improved spacing
+  - Maintains data caching for performance
+  - More mobile-friendly interaction pattern
+
+### Technical
+- Added `__version__` constant to app.py for centralized version management
+- Refactored analysis display from inline tooltip to centered modal overlay
+- JavaScript functions renamed: `loadAnalysisTooltip()` → `openAnalysisModal()`, `displayAnalysis()` → `displayAnalysisModal()`
+- Modal uses consistent styling with calendar scheduling popup (fixed overlay, responsive sizing)
+
+---
+
 ## [1.7.3] - 2026-02-01
 
 ### Fixed

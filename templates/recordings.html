@@ -51,21 +51,10 @@
                                     data-filename="{{ file.name }}" onchange="updateSelection()">
                             </td>
                             <td class="p-3 relative">
-                                <span class="font-mono text-sm cursor-help group relative"
-                                      data-filename="{{ file.name }}"
-                                      onmouseenter="loadAnalysisTooltip('{{ file.name }}', this)"
-                                      onmouseleave="hideTooltip(this)">
+                                <button class="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left"
+                                        onclick="openAnalysisModal('{{ file.name }}')">
                                     {{ file.name }}
-
-                                    <!-- Tooltip container (hidden by default) -->
-                                    <div class="tooltip-popup hidden absolute left-0 top-full mt-2 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl z-50 min-w-[300px]">
-                                        <div class="tooltip-loading">Loading analysis...</div>
-                                        <div class="tooltip-content hidden"></div>
-                                        <div class="tooltip-error hidden text-red-300"></div>
-                                        <!-- Pointer arrow -->
-                                        <div class="absolute bottom-full left-4 border-4 border-transparent border-b-gray-900"></div>
-                                    </div>
-                                </span>
+                                </button>
                             </td>
                             <td class="p-3 text-gray-600">
                                 {{ file.size_mb }} MB
@@ -146,6 +135,52 @@
             <div class="mt-4 p-4 bg-gray-50 border rounded text-sm">
                 <strong>Video Storage:</strong>
                 <span id="video-storage-status">Checking...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Analysis Modal -->
+    <div id="analysis-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+        <div class="bg-white rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center mb-4 pb-3 border-b">
+                <h3 class="text-lg sm:text-xl font-semibold text-gray-900">Audio Analysis</h3>
+                <button onclick="closeAnalysisModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Modal Content -->
+            <div id="analysis-modal-content">
+                <!-- Filename Display -->
+                <div class="mb-4 p-3 bg-gray-50 rounded">
+                    <p class="text-sm text-gray-600">File:</p>
+                    <p class="font-mono text-sm break-all" id="analysis-filename"></p>
+                </div>
+
+                <!-- Loading State -->
+                <div id="analysis-loading" class="text-center py-8">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <p class="mt-2 text-gray-600">Loading analysis...</p>
+                </div>
+
+                <!-- Error State -->
+                <div id="analysis-error" class="hidden p-4 bg-red-50 border border-red-200 rounded">
+                    <p class="text-red-800"></p>
+                </div>
+
+                <!-- Analysis Data -->
+                <div id="analysis-data" class="hidden space-y-4">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="mt-6 pt-4 border-t flex justify-end">
+                <button onclick="closeAnalysisModal()"
+                        class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded">
+                    Close
+                </button>
             </div>
         </div>
     </div>
@@ -365,22 +400,29 @@
         updateVideoStorage();
         setInterval(loadVideoFiles, 10000);
 
-        // Audio Analysis Tooltip Functions
+        // Audio Analysis Modal Functions
         // Cache for analysis results (avoid repeated API calls)
         const analysisCache = {};
 
-        async function loadAnalysisTooltip(filename, element) {
-            const tooltip = element.querySelector('.tooltip-popup');
-            const loading = tooltip.querySelector('.tooltip-loading');
-            const content = tooltip.querySelector('.tooltip-content');
-            const error = tooltip.querySelector('.tooltip-error');
+        async function openAnalysisModal(filename) {
+            const modal = document.getElementById('analysis-modal');
+            const filenameDisplay = document.getElementById('analysis-filename');
+            const loading = document.getElementById('analysis-loading');
+            const errorDiv = document.getElementById('analysis-error');
+            const dataDiv = document.getElementById('analysis-data');
 
-            // Show tooltip
-            tooltip.classList.remove('hidden');
+            // Show modal and filename
+            modal.classList.remove('hidden');
+            filenameDisplay.textContent = filename;
+
+            // Reset states
+            loading.classList.remove('hidden');
+            errorDiv.classList.add('hidden');
+            dataDiv.classList.add('hidden');
 
             // Check cache first
             if (analysisCache[filename]) {
-                displayAnalysis(analysisCache[filename], content, loading, error);
+                displayAnalysisModal(analysisCache[filename], loading, errorDiv, dataDiv);
                 return;
             }
 
@@ -392,70 +434,76 @@
                 // Cache result
                 analysisCache[filename] = data;
 
-                displayAnalysis(data, content, loading, error);
+                displayAnalysisModal(data, loading, errorDiv, dataDiv);
             } catch (err) {
                 loading.classList.add('hidden');
-                error.textContent = 'Failed to load analysis';
-                error.classList.remove('hidden');
+                errorDiv.querySelector('p').textContent = 'Failed to load analysis';
+                errorDiv.classList.remove('hidden');
             }
         }
 
-        function displayAnalysis(data, content, loading, error) {
+        function displayAnalysisModal(data, loading, errorDiv, dataDiv) {
             loading.classList.add('hidden');
 
             if (!data.analyzed) {
-                error.textContent = 'Analysis not available yet';
-                error.classList.remove('hidden');
+                errorDiv.querySelector('p').textContent = 'Analysis not available yet';
+                errorDiv.classList.remove('hidden');
                 return;
             }
 
-            // Build tooltip content
-            let html = '<div class="space-y-2">';
+            // Build modal content
+            let html = '';
 
             data.channels.forEach(ch => {
                 const channelLabel = ch.channel === 'left' ? 'Left Channel (L)' : 'Right Channel (R)';
 
                 if (ch.status === 'failed') {
-                    html += `<div class="border-b border-gray-700 pb-2">
-                        <div class="font-semibold text-red-300">${channelLabel}: Analysis Failed</div>
-                        <div class="text-red-200 text-xs">${ch.error_message || 'Unknown error'}</div>
+                    html += `<div class="p-4 bg-red-50 border border-red-200 rounded">
+                        <div class="font-semibold text-red-800">${channelLabel}: Analysis Failed</div>
+                        <div class="text-red-600 text-sm mt-1">${ch.error_message || 'Unknown error'}</div>
                     </div>`;
                 } else {
-                    html += `<div class="border-b border-gray-700 pb-2 last:border-b-0">
-                        <div class="font-semibold mb-1">${channelLabel}</div>
-                        <div class="grid grid-cols-2 gap-x-3 gap-y-1">
-                            <div class="text-gray-300">Duration:</div>
-                            <div>${formatDuration(ch.total_duration)}</div>
-
-                            <div class="text-gray-300">Non-silent:</div>
-                            <div class="font-medium ${ch.non_silent_percentage < 50 ? 'text-yellow-300' : 'text-green-300'}">
-                                ${ch.non_silent_percentage.toFixed(1)}%
+                    html += `<div class="p-4 bg-gray-50 border border-gray-200 rounded">
+                        <div class="font-semibold text-gray-900 mb-3 text-lg">${channelLabel}</div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-gray-600 text-sm">Duration</div>
+                                <div class="font-medium text-gray-900">${formatDuration(ch.total_duration)}</div>
                             </div>
 
-                            <div class="text-gray-300">Mean dB:</div>
-                            <div>${ch.mean_db.toFixed(1)} dB</div>
+                            <div>
+                                <div class="text-gray-600 text-sm">Non-silent</div>
+                                <div class="font-medium ${ch.non_silent_percentage < 50 ? 'text-yellow-600' : 'text-green-600'}">
+                                    ${ch.non_silent_percentage.toFixed(1)}%
+                                </div>
+                            </div>
 
-                            <div class="text-gray-300">Max dB:</div>
-                            <div class="font-medium">${ch.max_db.toFixed(1)} dB</div>
+                            <div>
+                                <div class="text-gray-600 text-sm">Mean dB</div>
+                                <div class="font-medium text-gray-900">${ch.mean_db.toFixed(1)} dB</div>
+                            </div>
 
-                            <div class="text-gray-300">Max at:</div>
-                            <div>${formatTime(ch.max_db_time)}</div>
+                            <div>
+                                <div class="text-gray-600 text-sm">Max dB</div>
+                                <div class="font-medium text-gray-900">${ch.max_db.toFixed(1)} dB</div>
+                            </div>
+
+                            <div class="col-span-2">
+                                <div class="text-gray-600 text-sm">Max dB occurred at</div>
+                                <div class="font-medium text-gray-900">${formatTime(ch.max_db_time)}</div>
+                            </div>
                         </div>
                     </div>`;
                 }
             });
 
-            html += '</div>';
-
-            content.innerHTML = html;
-            content.classList.remove('hidden');
+            dataDiv.innerHTML = html;
+            dataDiv.classList.remove('hidden');
         }
 
-        function hideTooltip(element) {
-            const tooltip = element.querySelector('.tooltip-popup');
-            setTimeout(() => {
-                tooltip.classList.add('hidden');
-            }, 200);  // Small delay to prevent flicker
+        function closeAnalysisModal() {
+            const modal = document.getElementById('analysis-modal');
+            modal.classList.add('hidden');
         }
 
         function formatDuration(seconds) {
