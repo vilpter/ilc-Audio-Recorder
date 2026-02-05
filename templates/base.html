@@ -30,7 +30,9 @@
                         <a href="/" class="hover:underline {% if request.path == '/' or request.path == '/calendar' %}font-semibold{% endif %}">Schedule</a>
                         <a href="/camera" class="hover:underline {% if request.path == '/camera' %}font-semibold{% endif %}">Control</a>
                         <a href="/recordings" class="hover:underline {% if request.path == '/recordings' %}font-semibold{% endif %}">Recordings</a>
+                        {% if current_user.can_access_settings() %}
                         <a href="/settings" class="hover:underline {% if request.path == '/settings' %}font-semibold{% endif %}">Settings</a>
+                        {% endif %}
                     </div>
                     <div id="current-datetime" class="hidden lg:block text-sm font-mono bg-blue-700 px-3 py-1 rounded">
                         Loading...
@@ -51,7 +53,9 @@
                     <a href="/" class="hover:bg-blue-700 px-3 py-2 rounded {% if request.path == '/' or request.path == '/calendar' %}font-semibold{% endif %}">Schedule</a>
                     <a href="/camera" class="hover:bg-blue-700 px-3 py-2 rounded {% if request.path == '/camera' %}font-semibold{% endif %}">Control</a>
                     <a href="/recordings" class="hover:bg-blue-700 px-3 py-2 rounded {% if request.path == '/recordings' %}font-semibold{% endif %}">Recordings</a>
+                    {% if current_user.can_access_settings() %}
                     <a href="/settings" class="hover:bg-blue-700 px-3 py-2 rounded {% if request.path == '/settings' %}font-semibold{% endif %}">Settings</a>
+                    {% endif %}
                 </div>
                 <div class="mt-4 pt-4 border-t border-blue-500 flex flex-wrap gap-2">
                     <div id="disk-space-mobile" class="text-sm font-mono bg-blue-700 px-3 py-1 rounded">

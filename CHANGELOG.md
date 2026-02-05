@@ -2,6 +2,45 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.8.0] - 2026-02-04
+
+### Added
+- **User Management System** - Multi-user support with role-based permissions
+  - Three permission tiers: Viewer, Operator, Admin
+  - **Viewer**: No Settings access; can use Schedule, Control, and Recordings
+  - **Operator**: Limited Settings (Audio Device and Camera Configuration only)
+  - **Admin**: Full access including user management
+  - Create, edit, and delete user accounts from Settings page
+  - Reset passwords for any user (admin only)
+  - View active sessions with online/offline status indicators
+  - Force logout capability for immediate session termination
+  - Permission changes take effect on next login
+- **Primary Admin Protection** - First user account cannot be deleted or demoted
+- **Session Management** - Token-based session tracking for force-logout capability
+- **Role Display** - User role badge shown in Account Settings section
+
+### Changed
+- **Settings Page** - Now role-restricted with section visibility based on permissions
+  - Operators see only Audio Device and Camera Configuration
+  - Admins see all sections plus new User Management section
+- **Navigation** - Settings tab hidden entirely for Viewer role users
+- **Account Settings** - Now displays current user's role badge
+
+### Technical
+- New database columns in `users` table: `role`, `is_primary_admin`, `session_token`
+- Automatic database migration for existing installations
+- New permission decorators: `@admin_required`, `@operator_required`, `@settings_access_required`, `@full_settings_required`
+- Session validation on every request with automatic logout on token mismatch
+- New API endpoints:
+  - `GET /api/users` - List all users
+  - `POST /api/users` - Create new user
+  - `PUT /api/users/<id>` - Update user role
+  - `DELETE /api/users/<id>` - Delete user
+  - `POST /api/users/<id>/force-logout` - Force logout user
+  - `POST /api/users/<id>/reset-password` - Admin reset password
+
+---
+
 ## [1.7.5] - 2026-02-02
 
 ### Fixed

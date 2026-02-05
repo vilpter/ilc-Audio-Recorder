@@ -6,10 +6,12 @@ Main Flask Application
 
 from flask import Flask, render_template, jsonify, request, send_file, redirect, url_for, flash
 from flask_login import login_required, login_user, logout_user, current_user
+from functools import wraps
 from pathlib import Path
 import json
 import math
 import os
+import secrets
 import subprocess
 import sqlite3
 from datetime import datetime
@@ -20,7 +22,7 @@ import auth
 import db_utils
 import validation
 
-__version__ = '1.7.5'
+__version__ = '1.8.0'
 
 app = Flask(__name__)
 
@@ -32,6 +34,76 @@ auth.login_manager.init_app(app)
 
 # Initialize auth database
 auth.init_auth_db()
+
+
+# ============================================================================
+# Permission Decorators and Session Validation
+# ============================================================================
+
+def admin_required(f):
+    """Decorator to require admin role for a route"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if not current_user.is_admin():
+            flash('Admin access required', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def operator_required(f):
+    """Decorator to require operator role or higher for a route"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if not current_user.is_operator():
+            flash('Insufficient permissions', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def settings_access_required(f):
+    """Decorator to require settings access (operator or admin)"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if not current_user.can_access_settings():
+            flash('You do not have access to settings', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def full_settings_required(f):
+    """Decorator to require full settings access (admin only)"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if not current_user.can_access_full_settings():
+            flash('Admin access required for this setting', 'error')
+            return redirect(url_for('settings_page'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+@app.before_request
+def check_session_validity():
+    """Check if user's session is still valid (not force-logged-out)"""
+    from flask import session
+    if current_user.is_authenticated:
+        session_token = session.get('session_token')
+        if session_token and not auth.User.validate_session(current_user.id, session_token):
+            # Session has been invalidated (force logout)
+            logout_user()
+            session.clear()
+            flash('Your session has been terminated by an administrator.', 'warning')
+            return redirect(url_for('login'))
 
 
 def get_recordings_dir():
@@ -79,7 +151,14 @@ def login():
         user = auth.User.get_by_username(username)
 
         if user and user.check_password(password):
+            # Generate and store session token for force-logout capability
+            session_token = secrets.token_hex(16)
+            auth.User.set_session_token(user.id, session_token)
+            # Store token in session (Flask-Login session)
             login_user(user, remember=bool(remember))
+            # Store token in Flask session for validation
+            from flask import session
+            session['session_token'] = session_token
             next_page = request.args.get('next')
             return redirect(next_page or url_for('index'))
         else:
@@ -92,6 +171,8 @@ def login():
 @login_required
 def logout():
     """Logout current user"""
+    # Clear session token
+    auth.User.clear_session_token(current_user.id)
     logout_user()
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
@@ -122,7 +203,8 @@ def setup():
             for error in errors:
                 flash(error, 'error')
         else:
-            user = auth.User.create(username, password)
+            # First user is always primary admin
+            user = auth.User.create(username, password, role='admin', is_primary_admin=True)
             if user:
                 flash('Admin account created successfully. Please log in.', 'success')
                 return redirect(url_for('login'))
@@ -153,6 +235,173 @@ def change_password():
             return redirect(url_for('settings_page'))
 
     return render_template('change_password.html')
+
+
+# ============================================================================
+# User Management API (Admin only)
+# ============================================================================
+
+@app.route('/api/users', methods=['GET'])
+@login_required
+@admin_required
+def get_users():
+    """Get list of all users (admin only)"""
+    users = auth.User.get_all_users()
+    return jsonify({
+        'users': users,
+        'current_user_id': current_user.id
+    })
+
+
+@app.route('/api/users', methods=['POST'])
+@login_required
+@admin_required
+def create_user():
+    """Create a new user (admin only)"""
+    data = request.json
+
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    role = data.get('role', 'viewer')
+
+    # Validation
+    if not username or len(username) < 3:
+        return jsonify({'error': 'Username must be at least 3 characters'}), 400
+    if not password or len(password) < 6:
+        return jsonify({'error': 'Password must be at least 6 characters'}), 400
+    if role not in auth.VALID_ROLES:
+        return jsonify({'error': f'Invalid role. Must be one of: {", ".join(auth.VALID_ROLES)}'}), 400
+
+    # Check for duplicate username
+    existing = auth.User.get_by_username(username)
+    if existing:
+        return jsonify({'error': 'Username already exists'}), 409
+
+    # Create user
+    user = auth.User.create(username, password, role=role, is_primary_admin=False)
+    if user:
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'role': user.role
+            }
+        })
+    else:
+        return jsonify({'error': 'Failed to create user'}), 500
+
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+@login_required
+@admin_required
+def update_user(user_id):
+    """Update a user's role (admin only)"""
+    data = request.json
+    new_role = data.get('role')
+
+    if not new_role:
+        return jsonify({'error': 'Role is required'}), 400
+    if new_role not in auth.VALID_ROLES:
+        return jsonify({'error': f'Invalid role. Must be one of: {", ".join(auth.VALID_ROLES)}'}), 400
+
+    # Get user
+    user = auth.User.get_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Cannot change primary admin's role
+    if user.is_primary_admin:
+        return jsonify({'error': 'Cannot change the primary admin\'s role'}), 403
+
+    # Cannot change own role (prevent admin from demoting themselves)
+    if user_id == current_user.id:
+        return jsonify({'error': 'Cannot change your own role'}), 403
+
+    # Update role
+    if auth.User.update_role(user_id, new_role):
+        return jsonify({
+            'success': True,
+            'message': f'User role updated to {new_role}'
+        })
+    else:
+        return jsonify({'error': 'Failed to update role'}), 500
+
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_user(user_id):
+    """Delete a user (admin only)"""
+    # Get user
+    user = auth.User.get_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Cannot delete primary admin
+    if user.is_primary_admin:
+        return jsonify({'error': 'Cannot delete the primary admin'}), 403
+
+    # Cannot delete self
+    if user_id == current_user.id:
+        return jsonify({'error': 'Cannot delete your own account'}), 403
+
+    # Delete user
+    if auth.User.delete_user(user_id):
+        return jsonify({
+            'success': True,
+            'message': f'User {user.username} has been deleted'
+        })
+    else:
+        return jsonify({'error': 'Failed to delete user'}), 500
+
+
+@app.route('/api/users/<int:user_id>/force-logout', methods=['POST'])
+@login_required
+@admin_required
+def force_logout_user(user_id):
+    """Force logout a user by invalidating their session (admin only)"""
+    # Get user
+    user = auth.User.get_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Cannot force logout self (use regular logout instead)
+    if user_id == current_user.id:
+        return jsonify({'error': 'Cannot force logout yourself. Use regular logout instead.'}), 403
+
+    # Invalidate session
+    auth.User.invalidate_session(user_id)
+
+    return jsonify({
+        'success': True,
+        'message': f'User {user.username} has been logged out'
+    })
+
+
+@app.route('/api/users/<int:user_id>/reset-password', methods=['POST'])
+@login_required
+@admin_required
+def admin_reset_password(user_id):
+    """Admin reset of user password (admin only)"""
+    data = request.json
+    new_password = data.get('password', '')
+
+    if not new_password or len(new_password) < 6:
+        return jsonify({'error': 'Password must be at least 6 characters'}), 400
+
+    # Get user
+    user = auth.User.get_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Update password
+    auth.User.update_password(user.username, new_password)
+
+    return jsonify({
+        'success': True,
+        'message': f'Password reset for user {user.username}'
+    })
 
 
 # ============================================================================
@@ -724,9 +973,10 @@ def batch_download_files():
         return jsonify({'error': str(e)}), 500
 
 
-# Filename Configuration Routes
+# Filename Configuration Routes (Admin Only)
 @app.route('/api/config/filename', methods=['GET'])
 @login_required
+@full_settings_required
 def get_filename_config():
     """Get current filename configuration"""
     try:
@@ -748,6 +998,7 @@ def get_filename_config():
 
 @app.route('/api/config/filename', methods=['POST'])
 @login_required
+@full_settings_required
 def save_filename_config():
     """Save filename configuration"""
     data = request.json
@@ -779,9 +1030,10 @@ def save_filename_config():
         return jsonify({'error': str(e)}), 500
 
 
-# Storage Path Configuration Routes
+# Storage Path Configuration Routes (Admin Only)
 @app.route('/api/config/storage', methods=['GET'])
 @login_required
+@full_settings_required
 def get_storage_config():
     """Get current storage path configuration"""
     storage_path = scheduler.get_system_config('storage_path', '/mnt/usb_recorder')
@@ -800,6 +1052,7 @@ def get_storage_config():
 
 @app.route('/api/config/storage', methods=['POST'])
 @login_required
+@full_settings_required
 def save_storage_config():
     """Save storage path configuration"""
     data = request.json
@@ -826,9 +1079,10 @@ def save_storage_config():
     return jsonify({'success': True})
 
 
-# Directory Browser API Endpoints
+# Directory Browser API Endpoints (Admin Only)
 @app.route('/api/directories/list', methods=['POST'])
 @login_required
+@full_settings_required
 def list_directories():
     """
     List directories at a given path for the directory browser.
@@ -897,6 +1151,7 @@ def list_directories():
 
 @app.route('/api/directories/create', methods=['POST'])
 @login_required
+@full_settings_required
 def create_directory():
     """
     Create a new directory within a parent path.
@@ -987,11 +1242,16 @@ def calendar_page():
 # Settings Page Route
 @app.route('/settings')
 @login_required
+@settings_access_required
 def settings_page():
     """System settings interface"""
     # Get current audio device config
     audio_device = scheduler.get_system_config('audio_device', 'auto')
-    return render_template('settings.html', current_device=audio_device, version=__version__)
+    return render_template('settings.html',
+                          current_device=audio_device,
+                          version=__version__,
+                          user_role=current_user.role,
+                          is_admin=current_user.is_admin())
 
 
 # Audio Device Configuration API
@@ -1144,6 +1404,7 @@ def _get_log_file_path(log_type):
 
 @app.route('/api/logs/paths', methods=['GET'])
 @login_required
+@full_settings_required
 def get_log_paths():
     """Get all log file paths for display in Settings"""
     home_log_dir = Path.home() / '.audio-recorder'
@@ -1160,6 +1421,7 @@ def get_log_paths():
 
 @app.route('/api/logs', methods=['GET'])
 @login_required
+@full_settings_required
 def get_logs():
     """Get application logs"""
     log_type = request.args.get('type', 'app')
@@ -1191,9 +1453,10 @@ def get_logs():
         return jsonify({'error': str(e), 'file_path': str(log_file)}), 500
 
 
-# Backup/Restore API Endpoints (Refactored)
+# Backup/Restore API Endpoints (Admin Only)
 @app.route('/api/export/<export_type>', methods=['GET'])
 @login_required
+@full_settings_required
 def export_data(export_type):
     """
     Export schedules or configuration as downloadable file
@@ -1241,6 +1504,7 @@ def export_data(export_type):
 
 @app.route('/api/import/<import_type>', methods=['POST'])
 @login_required
+@full_settings_required
 def import_data(import_type):
     """
     Import schedules or configuration from uploaded file with auto-backup
@@ -1345,6 +1609,7 @@ def import_data(import_type):
 
 @app.route('/api/revert/<revert_type>', methods=['POST'])
 @login_required
+@full_settings_required
 def revert_data(revert_type):
     """
     Revert to last backup before import
@@ -1408,6 +1673,7 @@ def revert_data(revert_type):
 
 @app.route('/api/revert/available', methods=['GET'])
 @login_required
+@full_settings_required
 def check_revert_available():
     """Check if revert backups exist for schedules and/or config"""
     backup_dir = Path.home() / '.audio-recorder' / 'backups'

@@ -44,6 +44,7 @@ A professional-grade dual-channel audio and video recording system with web-base
 - Disk space monitoring in navigation ribbon
 - Complete backup/restore system
 - User authentication with login/logout
+- Role-based permissions (Viewer, Operator, Admin)
 
 ### System
 - Auto-start service (systemd)
@@ -433,6 +434,10 @@ On first access, you'll be prompted to create an admin account:
 - "Remember me" option for persistent sessions
 - Change password from Settings page
 - All routes protected - login required
+- Role-based access control:
+  - **Viewer**: Schedule, Control, Recordings access only
+  - **Operator**: Limited Settings (Audio/Camera config)
+  - **Admin**: Full access including user management
 
 ### Security Notes
 - Designed for **local network use**
@@ -440,61 +445,10 @@ On first access, you'll be prompted to create an admin account:
 - Credentials stored with secure password hashing (Werkzeug)
 - Session secret key auto-generated and stored in `~/.audio-recorder/`
 
-## Changelog (full details in CHANGELOG.md)
-
-### v1.7.3 (Current)
-- Fixed audio analysis not storing results to database
-- Fixed batch analysis suffix matching to use configured channel suffixes
-
-### v1.7.1
-- Database clean-up tool in Settings page
-- Remove old completed, failed, cancelled, or missed recording entries
-- Configurable retention period (1, 3, 6, 12, 24 months)
-- Two-step confirmation with preview of deletion counts
-- Preserves recurring recording patterns
-
-### v1.7.0
-- Automatic audio file analysis after recordings complete
-- Silence detection and dB level analysis for each channel
-- Interactive tooltips in Recordings page showing analysis results
-- Background batch analysis for unanalyzed files
-- Database storage for persistent analysis results
-
-### v1.6.0
-- Added sticky navigation bar that remains visible while scrolling
-- Implemented template inheritance for cleaner HTML structure and better maintainability
-- Fixed recurring schedule database serialization issue
-
-### v1.5.0
-- Rebranded from "Audio Recorder" to "Church Recording"
-- Renamed Calendar page to "Schedule" - calendar-based scheduling
-- Renamed Camera page to "New/In Progress" - unified recording controls
-- Unified recording and status controls for Audio/Video
-- Added mobile page indicator
-- Removed standalone Schedule page (consolidated into calendar modal)
-- Moved Quick Record from Settings to New/In Progress page
-
-### v1.4.0
-- Added PTZOptics camera integration for synchronized A/V recording
-- RTSP stream capture with zero CPU (hardware-accelerated) re-encoding (`-c copy`)
-- Real-time transcode progress tracking
-- USB storage support for video files
-- Video capture checkbox in Schedule page
-- Camera settings page with preset naming
-- Live stream viewing with copyable URLs
-
-### v1.3.0
-- Added user authentication (login/logout)
-- Added batch file operations (multi-select, bulk download/delete)
-- Added disk space monitoring in navigation ribbon
-
-See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
-
 ## Roadmap
 
 ### Planned Features
 - Add configurable audio post-processing (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate
-- Add support for multiple user accounts
 - In Controls, add an indication of any other users who are currently logged in
 - Note the last date of download for files
 
@@ -505,6 +459,26 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 - **Audio:** FFmpeg, ALSA
 - **Database:** SQLite3
 
+## Development Notes
+
+### Post-Work Checklist
+After completing development work, ensure the following are updated:
+
+1. **Version Numbers**
+   - Update `__version__` in `app.py`
+   - Update version at bottom of `README.md`
+   - Add entry to `CHANGELOG.md`
+
+2. **Documentation**
+   - Update `CHANGELOG.md` with detailed changes
+   - Update `README.md` features if applicable
+   - Update `ARCHITECTURE.md` if API or schema changed
+
+3. **Testing**
+   - Verify Python syntax: `python3 -m py_compile app.py auth.py`
+   - Test affected functionality in browser
+   - Check for console errors in browser dev tools
+
 ## Support
 
 - **Issues:** [GitHub Issues](https://github.com/vilpter/ilc-Audio-Recorder/issues)
@@ -512,5 +486,5 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
 
 ---
 
-**Version:** 1.7.3
-**Last Updated:** 2026-02-01
+**Version:** 1.8.0
+**Last Updated:** 2026-02-04
