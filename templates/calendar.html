@@ -680,8 +680,8 @@
                             const cb = document.querySelector(`.modal-weekday[value="${day}"]`);
                             if (cb) cb.checked = true;
                         });
-                        // Update display text to show the selected day from pattern
-                        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                        // Update display text to show the selected day from pattern (Mon=0, Sun=6)
+                        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
                         if (pattern.days.length > 0) {
                             document.getElementById('weekly-day-display').textContent = dayNames[pattern.days[0]];
                         }
@@ -751,9 +751,9 @@
             if (!dateInput.value) return;
 
             const selectedDate = new Date(dateInput.value + 'T00:00:00');
-            const dayOfWeek = selectedDate.getDay();
+            const dayOfWeek = (selectedDate.getDay() + 6) % 7; // Convert to Mon=0, Sun=6 to match checkbox values
             const dayOfMonth = selectedDate.getDate();
-            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
             if (type === 'weekly') {
                 // Clear all weekday checkboxes first

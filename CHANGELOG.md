@@ -2,10 +2,11 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
-## [1.9.1] - 2026-02-07
+## [1.9.2] - 2026-02-07
 
 ### Fixed
 - **Calendar date off-by-one bug** - Clicking a future day in the Schedule calendar opened the "Create New Recording" modal with the wrong date (one day ahead). Root cause was `toISOString()` converting local dates to UTC, which shifts the day forward in timezones west of UTC. Replaced all date-to-string conversions with local date formatting using `getFullYear()`/`getMonth()`/`getDate()` to avoid timezone drift.
+- **Recurring weekly schedule day-of-week mismatch** - Weekly recurring schedules were saved for the wrong day of the week. The weekday checkbox values use Mon=0 indexing, but `getDay()` returns Sun=0 indexing, causing a one-day shift (e.g., clicking Sunday would schedule for Monday). Applied consistent Mon=0 conversion across recurring schedule creation and editing.
 
 ---
 
