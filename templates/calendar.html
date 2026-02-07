@@ -261,7 +261,7 @@
                     eventsOnDay.forEach(event => {
                         // Calculate time-based color
                         const now = getCurrentTime();
-                        const dayStr = currentDay.toISOString().split('T')[0];
+                        const dayStr = formatDateForInput(currentDay);
 
                         // For recurring jobs, check if there's an instance for this specific date
                         let instance = null;
@@ -316,7 +316,7 @@
                         }
 
                         const typeIndicator = event.capture_video ? 'A&V' : 'A';
-                        const currentDayStr = currentDay.toISOString();
+                        const currentDayStr = formatDateForInput(currentDay);
                         html += `<div class="${bgColor} border rounded px-1 sm:px-2 py-0.5 sm:py-1 mb-1 text-xs cursor-pointer hover:opacity-80"
                                      onclick='event.stopPropagation(); showEventDetails(${JSON.stringify(event)}, "${currentDayStr}")'>`;
                         html += `<div class="font-semibold truncate">${event.name} <span class="opacity-60">[${typeIndicator}]</span></div>`;
@@ -348,7 +348,7 @@
         }
 
         function getEventsForDay(day) {
-            const dayStr = day.toISOString().split('T')[0];
+            const dayStr = formatDateForInput(day);
             const now = getCurrentTime();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -400,8 +400,8 @@
             headingEl.textContent = event.name;
 
             // Parse the clicked date
-            const clickedDate = new Date(clickedDateStr);
-            const occurrenceDate = clickedDate.toISOString().split('T')[0];
+            const clickedDate = new Date(clickedDateStr + 'T00:00:00');
+            const occurrenceDate = formatDateForInput(clickedDate);
 
             // For recurring jobs, ensure instance exists and get instance data
             let instance = null;
@@ -597,7 +597,10 @@
         }
 
         function formatDateForInput(date) {
-            return date.toISOString().split('T')[0];
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         }
 
         function checkModalDurationWarning() {
@@ -646,7 +649,7 @@
 
             // Parse start time
             const startTime = new Date(event.start_time);
-            const dateStr = startTime.toISOString().split('T')[0];
+            const dateStr = formatDateForInput(startTime);
             const timeStr = startTime.toTimeString().substring(0, 5);
 
             document.getElementById('modal-date').value = dateStr;
