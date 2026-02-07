@@ -23,3 +23,6 @@ tzlocal==5.2
 
 # HTTP Requests (for camera API)
 requests==2.31.0
+
+# Audio Analysis (artifact detection)
+numpy>=1.24.0

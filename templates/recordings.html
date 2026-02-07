@@ -51,7 +51,10 @@
                                     data-filename="{{ file.name }}" onchange="updateSelection()">
                             </td>
                             <td class="p-3 relative">
-                                <button class="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left"
+                                <span class="quality-badge inline-block w-3 h-3 rounded-full bg-gray-300 mr-1.5 align-middle"
+                                      data-filename="{{ file.name }}"
+                                      title="Not yet analyzed"></span>
+                                <button class="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left align-middle"
                                         onclick="openAnalysisModal('{{ file.name }}')">
                                     {{ file.name }}
                                 </button>
@@ -493,6 +496,7 @@
                                 <div class="font-medium text-gray-900">${formatTime(ch.max_db_time)}</div>
                             </div>
                         </div>
+                    ${buildAudioQualitySection(ch)}
                     </div>`;
                 }
             });
@@ -517,5 +521,117 @@
             const secs = Math.floor(seconds % 60);
             return `${mins}m ${secs}s`;
         }
+
+        // Audio Quality section for the analysis modal
+        function buildAudioQualitySection(ch) {
+            if (ch.quality_score === null || ch.quality_score === undefined) {
+                return '';
+            }
+
+            const totalClips = (ch.digital_clip_count || 0) + (ch.flatline_clip_count || 0);
+            const discs = ch.discontinuity_count || 0;
+
+            const scoreDot = {
+                'green': 'bg-green-500',
+                'yellow': 'bg-yellow-500',
+                'red': 'bg-red-500'
+            }[ch.quality_score] || 'bg-gray-400';
+
+            let html = `
+                <div class="mt-3 pt-3 border-t border-gray-200">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="inline-block w-3 h-3 rounded-full ${scoreDot}"></span>
+                        <span class="font-medium text-sm">Audio Quality</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3 text-sm">
+                        <div class="p-2 rounded ${(ch.digital_clip_count || 0) > 0 ? 'bg-red-50' : 'bg-green-50'}">
+                            <div class="text-gray-600 text-xs">Digital Clips</div>
+                            <div class="font-medium">${ch.digital_clip_count || 0}</div>
+                        </div>
+                        <div class="p-2 rounded ${(ch.flatline_clip_count || 0) > 0 ? 'bg-red-50' : 'bg-green-50'}">
+                            <div class="text-gray-600 text-xs">Flat-top Clips</div>
+                            <div class="font-medium">${ch.flatline_clip_count || 0}</div>
+                        </div>
+                        <div class="p-2 rounded ${discs > 0 ? 'bg-yellow-50' : 'bg-green-50'}">
+                            <div class="text-gray-600 text-xs">Discontinuities</div>
+                            <div class="font-medium">${discs}</div>
+                        </div>
+                    </div>`;
+
+            // Show timestamps of issues if artifact_details present
+            if (ch.artifact_details) {
+                const details = ch.artifact_details;
+
+                if (details.clipping_events && details.clipping_events.length > 0) {
+                    html += `
+                        <div class="mt-2">
+                            <div class="text-xs font-medium text-gray-500 mb-1">Clipping timestamps:</div>
+                            <div class="text-xs text-gray-600 font-mono max-h-20 overflow-y-auto">
+                                ${details.clipping_events.slice(0, 20).map(e =>
+                                    `${formatTime(e.t)} (${e.type}, ${e.dur} samples)`
+                                ).join(', ')}
+                                ${details.clipping_events.length > 20 ? ` ... and ${details.clipping_events.length - 20} more` : ''}
+                            </div>
+                        </div>`;
+                }
+
+                if (details.discontinuity_events && details.discontinuity_events.length > 0) {
+                    html += `
+                        <div class="mt-2">
+                            <div class="text-xs font-medium text-gray-500 mb-1">Discontinuity timestamps:</div>
+                            <div class="text-xs text-gray-600 font-mono max-h-20 overflow-y-auto">
+                                ${details.discontinuity_events.slice(0, 20).map(e =>
+                                    `${formatTime(e.t)} (jump: ${e.mag})`
+                                ).join(', ')}
+                                ${details.discontinuity_events.length > 20 ? ` ... and ${details.discontinuity_events.length - 20} more` : ''}
+                            </div>
+                        </div>`;
+                }
+
+                if (details.truncated) {
+                    html += `<div class="mt-1 text-xs text-gray-400 italic">Event list truncated</div>`;
+                }
+            }
+
+            html += `</div>`;
+            return html;
+        }
+
+        // Traffic-light quality badges in the file list
+        async function loadQualityScores() {
+            try {
+                const response = await fetch('/api/recordings/quality-scores');
+                const data = await response.json();
+
+                if (!data.scores) return;
+
+                document.querySelectorAll('.quality-badge').forEach(badge => {
+                    const filename = badge.dataset.filename;
+                    const score = data.scores[filename];
+
+                    // Remove default gray
+                    badge.classList.remove('bg-gray-300');
+
+                    if (score === 'green') {
+                        badge.classList.add('bg-green-500');
+                        badge.title = 'Clean audio';
+                    } else if (score === 'yellow') {
+                        badge.classList.add('bg-yellow-500');
+                        badge.title = 'Minor issues detected';
+                    } else if (score === 'red') {
+                        badge.classList.add('bg-red-500');
+                        badge.title = 'Significant issues detected';
+                    } else {
+                        badge.classList.add('bg-gray-300');
+                        badge.title = 'Not yet analyzed';
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading quality scores:', error);
+            }
+        }
+
+        // Load quality badges on page load
+        loadQualityScores();
     </script>
 {% endblock %}

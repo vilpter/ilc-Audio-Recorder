@@ -169,6 +169,20 @@ def init_database():
             ON audio_analysis(filename)
         ''')
 
+        # Add artifact detection columns if they don't exist (for upgrades)
+        for col_def in [
+            'digital_clip_count INTEGER',
+            'flatline_clip_count INTEGER',
+            'discontinuity_count INTEGER',
+            'quality_score TEXT',
+            'artifact_details TEXT',
+            'artifact_version INTEGER',
+        ]:
+            try:
+                cursor.execute(f'ALTER TABLE audio_analysis ADD COLUMN {col_def}')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
         # Set default audio device to auto-detect
         cursor.execute('''
             INSERT OR IGNORE INTO system_config (key, value, updated_at)

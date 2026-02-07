@@ -2,6 +2,39 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.9.0] - 2026-02-06
+
+### Added
+- **Audio Artifact Detection** - New clipping and discontinuity analysis for recorded audio
+  - **Digital Clipping Detection**: Identifies samples at or near 16-bit maximum (±32760+)
+  - **Flat-top Clipping Detection**: Catches upstream/analog clipping from mixers and preamps by detecting runs of consecutive near-identical samples in high-amplitude regions — works at any clipping level, not just digital max
+  - **Discontinuity Detection**: Flags sudden jumps in the audio signal using adaptive statistical thresholding (6 standard deviations above local mean), with a minimum magnitude floor to prevent false positives in quiet passages
+  - Processes audio in 10-second chunks via FFmpeg pipe to NumPy for constant memory usage (~1 MB) regardless of file duration
+  - Chunk boundary handling with 50-sample tail buffer to catch artifacts spanning chunk edges
+- **Traffic-Light Quality Badges** - Color-coded dots next to each filename on the Recordings page
+  - Green: Clean audio (no issues)
+  - Yellow: Minor issues (5+ clips or 1+ discontinuity)
+  - Red: Significant issues (50+ clips or 5+ discontinuities)
+  - Gray: Not yet analyzed (legacy recordings)
+  - Loaded via single API call on page load for performance
+- **Audio Quality Section in Analysis Modal** - Expanded per-channel modal display
+  - Three stat boxes showing Digital Clips, Flat-top Clips, and Discontinuities with color-coded backgrounds
+  - Scrollable timestamp lists for each detected issue (up to 20 shown per category)
+  - Graceful display for legacy recordings without artifact data
+- **Quality Scores API** - New `GET /api/recordings/quality-scores` endpoint for bulk quality badge data
+
+### Technical
+- New `artifact_detector.py` module with `ArtifactDetector` class using NumPy for sample-level analysis
+- Added `numpy>=1.24.0` to requirements.txt
+- Six new columns in `audio_analysis` table: `digital_clip_count`, `flatline_clip_count`, `discontinuity_count`, `quality_score`, `artifact_details` (JSON), `artifact_version`
+- Automatic database migration via ALTER TABLE (existing rows get NULL values)
+- Artifact detection integrated into existing analysis pipeline — runs sequentially after FFmpeg-based analysis within `_analyze_recording_delayed()`
+- Artifact detection failure does not block basic analysis storage (graceful degradation)
+- Expanded `/api/recordings/<filename>/analysis` response with artifact fields
+- Detection thresholds defined as module-level constants for easy tuning
+
+---
+
 ## [1.8.0] - 2026-02-04
 
 ### Added

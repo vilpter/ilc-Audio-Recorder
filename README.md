@@ -14,7 +14,9 @@ A professional-grade dual-channel audio and video recording system with web-base
 - 4-hour duration limit with override option
 - Pre-flight disk space checking
 - Automatic post-recording analysis (silence detection, dB levels)
-- Interactive tooltips showing analysis results per channel
+- Audio artifact detection (digital clipping, upstream/analog flat-top clipping, discontinuities)
+- Traffic-light quality badges on Recordings page (green/yellow/red)
+- Interactive analysis modal showing per-channel metrics and quality details
 
 ### Video Recording
 - PTZOptics camera integration for synchronized A/V capture
@@ -185,7 +187,8 @@ sudo systemctl start audio-recorder
 - Browse raw and processed video files
 - Batch select for bulk download or delete
 - Download recordings as ZIP archive
-- Hover over filenames to view audio analysis (duration, silence percentage, dB levels)
+- Click filenames to view audio analysis (duration, silence percentage, dB levels, clipping, discontinuities)
+- Traffic-light quality badges for at-a-glance audio health overview
 
 ### Settings (/settings)
 - Configure audio device (auto-detect or manual)
@@ -213,6 +216,7 @@ audio-recorder/
 ├── fix_service.sh            # Service troubleshooting script
 ├── troubleshoot_audio.sh     # Diagnostic script for scheduled recordings
 ├── audio_analyzer.py         # Audio analysis module (silence detection, dB levels)
+├── artifact_detector.py      # Audio artifact detection (clipping, discontinuities)
 ├── configs/
 │   ├── asound.conf           # ALSA configuration
 │   └── 85-usb-audio.rules    # udev rules for USB audio
@@ -486,5 +490,5 @@ After completing development work, ensure the following are updated:
 
 ---
 
-**Version:** 1.8.0
-**Last Updated:** 2026-02-04
+**Version:** 1.9.0
+**Last Updated:** 2026-02-06

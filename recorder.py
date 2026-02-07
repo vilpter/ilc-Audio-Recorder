@@ -495,13 +495,33 @@ def _analyze_recording_delayed(source_a, source_b, job_timestamp):
                 logger.error(f"No channel data in analysis for {filepath}")
                 return
 
+            # Run artifact detection (clipping + discontinuities)
+            artifact_result = None
+            try:
+                import artifact_detector
+                artifact_result = artifact_detector.detect_artifacts(str(filepath))
+                if artifact_result.error_message:
+                    logger.warning(f"Artifact detection warning for {filepath.name}: "
+                                  f"{artifact_result.error_message}")
+                    artifact_result = None
+                else:
+                    logger.info(f"Artifact detection for {filepath.name}: "
+                               f"{artifact_result.digital_clip_count} digital clips, "
+                               f"{artifact_result.flatline_clip_count} flatline clips, "
+                               f"{artifact_result.discontinuity_count} discontinuities, "
+                               f"quality={artifact_result.quality_score}")
+            except Exception as ae:
+                logger.error(f"Artifact detection failed for {filepath}: {ae}")
+
             # Store in database
             from scheduler import DB_PATH
             db_utils.execute_query(DB_PATH, '''
                 INSERT OR REPLACE INTO audio_analysis
                 (filename, channel, analyzed_at, total_duration, non_silent_percentage,
-                 mean_db, max_db, max_db_time, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 mean_db, max_db, max_db_time, status,
+                 digital_clip_count, flatline_clip_count, discontinuity_count,
+                 quality_score, artifact_details, artifact_version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 filepath.name,
                 channel_name,
@@ -511,7 +531,13 @@ def _analyze_recording_delayed(source_a, source_b, job_timestamp):
                 channel_stats['mean_db'],
                 channel_stats['max_db'],
                 channel_stats['max_db_time'],
-                'completed'
+                'completed',
+                artifact_result.digital_clip_count if artifact_result else None,
+                artifact_result.flatline_clip_count if artifact_result else None,
+                artifact_result.discontinuity_count if artifact_result else None,
+                artifact_result.quality_score if artifact_result else None,
+                artifact_result.to_artifact_json() if artifact_result else None,
+                1 if artifact_result else None,
             ), commit=True)
 
             logger.info(f"Analysis completed for {filepath.name}: "

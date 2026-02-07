@@ -14,6 +14,7 @@ This document provides technical details for developers and system administrator
 - **SQLite3** - Database for schedules, config, and users
 - **FFmpeg** - Audio/video processing (system package)
 - **ALSA** - Audio hardware interface (system package)
+- **NumPy** - Sample-level audio artifact analysis
 - **Requests** - HTTP client for camera control
 
 ### Frontend
@@ -126,6 +127,12 @@ CREATE TABLE audio_analysis (
     max_db_time REAL,
     status TEXT DEFAULT 'completed',
     error_message TEXT,
+    digital_clip_count INTEGER,
+    flatline_clip_count INTEGER,
+    discontinuity_count INTEGER,
+    quality_score TEXT,
+    artifact_details TEXT,
+    artifact_version INTEGER,
     UNIQUE(filename, channel)
 )
 
@@ -145,6 +152,12 @@ Fields:
 - `max_db_time` - Timestamp where max dB occurs (seconds from start)
 - `status` - 'completed' or 'failed'
 - `error_message` - Error details if analysis failed
+- `digital_clip_count` - Number of digital clipping events (samples at/near ±32760)
+- `flatline_clip_count` - Number of flat-top clipping events (upstream/analog clipping)
+- `discontinuity_count` - Number of detected audio discontinuities
+- `quality_score` - Traffic-light score: 'green', 'yellow', or 'red'
+- `artifact_details` - JSON blob with timestamps and details of detected issues
+- `artifact_version` - Schema version for artifact detection algorithm
 
 ### Authentication Database (`~/.audio-recorder/auth.db`)
 

@@ -22,7 +22,7 @@ import auth
 import db_utils
 import validation
 
-__version__ = '1.8.0'
+__version__ = '1.9.0'
 
 app = Flask(__name__)
 
@@ -860,10 +860,12 @@ def delete_file(filename):
 def get_file_analysis(filename):
     """Get audio analysis results for a recording file"""
     try:
-        # Fetch analysis for both channels
+        # Fetch analysis for both channels (including artifact detection fields)
         results = db_utils.fetch_all(scheduler.DB_PATH, '''
             SELECT channel, analyzed_at, total_duration, non_silent_percentage,
-                   mean_db, max_db, max_db_time, status, error_message
+                   mean_db, max_db, max_db_time, status, error_message,
+                   digital_clip_count, flatline_clip_count, discontinuity_count,
+                   quality_score, artifact_details, artifact_version
             FROM audio_analysis
             WHERE filename = ?
             ORDER BY channel
@@ -886,6 +888,14 @@ def get_file_analysis(filename):
             return val
 
         for row in results:
+            # Parse artifact_details JSON if present
+            artifact_details = None
+            if row[13]:
+                try:
+                    artifact_details = json.loads(row[13])
+                except (json.JSONDecodeError, TypeError):
+                    artifact_details = None
+
             channel_data = {
                 'channel': row[0],  # 'left' or 'right'
                 'analyzed_at': row[1],
@@ -895,11 +905,45 @@ def get_file_analysis(filename):
                 'max_db': sanitize_db_value(row[5]),
                 'max_db_time': row[6],
                 'status': row[7],
-                'error_message': row[8]
+                'error_message': row[8],
+                'digital_clip_count': row[9],
+                'flatline_clip_count': row[10],
+                'discontinuity_count': row[11],
+                'quality_score': row[12],
+                'artifact_details': artifact_details,
+                'artifact_version': row[14],
             }
             analysis_data['channels'].append(channel_data)
 
         return jsonify(analysis_data)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recordings/quality-scores')
+@login_required
+def get_quality_scores():
+    """Get quality scores for all analyzed files (for traffic-light badges)"""
+    try:
+        results = db_utils.fetch_all(scheduler.DB_PATH, '''
+            SELECT filename, quality_score
+            FROM audio_analysis
+            WHERE quality_score IS NOT NULL
+        ''')
+
+        # Per-file scores: worst channel score wins
+        scores = {}
+        priority = {'red': 3, 'yellow': 2, 'green': 1}
+
+        for row in results:
+            filename = row[0]
+            score = row[1]
+            current = scores.get(filename, 'green')
+            if priority.get(score, 0) > priority.get(current, 0):
+                scores[filename] = score
+
+        return jsonify({'scores': scores})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
