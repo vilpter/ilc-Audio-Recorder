@@ -193,6 +193,25 @@
         // Update disk space immediately and every 30 seconds
         updateDiskSpace();
         setInterval(updateDiskSpace, 30000);
+
+        // Global modal safety: ensure all modal backdrops are hidden on page load,
+        // close on Escape key, and close when clicking the backdrop area
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.fixed.inset-0').forEach(el => el.classList.add('hidden'));
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.fixed.inset-0:not(.hidden)').forEach(el => el.classList.add('hidden'));
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            const modal = e.target.closest('.fixed.inset-0:not(.hidden)');
+            if (modal && e.target === modal) {
+                modal.classList.add('hidden');
+            }
+        });
     </script>
     {% block extra_scripts %}{% endblock %}
 </body>

@@ -1016,13 +1016,19 @@
 
                 const container = document.getElementById('log-container');
 
+                // Check if user is scrolled near the bottom before updating content
+                const scrollThreshold = 50;
+                const wasAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < scrollThreshold;
+
                 if (data.logs && data.logs.length > 0) {
                     container.innerHTML = data.logs.map(line =>
                         `<div>${escapeHtml(line)}</div>`
                     ).join('');
 
-                    // Scroll to bottom
-                    container.scrollTop = container.scrollHeight;
+                    // Only auto-scroll if user was already at the bottom
+                    if (wasAtBottom) {
+                        container.scrollTop = container.scrollHeight;
+                    }
 
                     document.getElementById('log-info').textContent =
                         `Showing ${data.showing_lines} of ${data.total_lines} total lines`;
