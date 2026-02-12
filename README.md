@@ -17,6 +17,7 @@ A professional-grade dual-channel audio and video recording system with web-base
 - Audio artifact detection (digital clipping, upstream/analog flat-top clipping, discontinuities)
 - Traffic-light quality badges on Recordings page (green/yellow/red)
 - Interactive analysis modal showing per-channel metrics and quality details
+- Section tagging during recording (mark beginning/ending of segments for post-processing)
 
 ### Video Recording
 - PTZOptics camera integration for synchronized A/V capture
@@ -178,6 +179,7 @@ sudo systemctl start audio-recorder
 ### New/In Progress (/camera)
 - Unified recording controls: Audio Only, Video Only, or Both
 - Combined audio/video status display
+- Section tagging: mark beginning/ending of segments during recording
 - Control PTZ camera presets (10 customizable positions)
 - View video transcode progress
 - Access live stream URLs for external players
@@ -188,6 +190,7 @@ sudo systemctl start audio-recorder
 - Batch select for bulk download or delete
 - Download recordings as ZIP archive
 - Click filenames to view audio analysis (duration, silence percentage, dB levels, clipping, discontinuities)
+- Section tags displayed in analysis modal for post-processing reference
 - Traffic-light quality badges for at-a-glance audio health overview
 
 ### Settings (/settings)
@@ -453,7 +456,6 @@ On first access, you'll be prompted to create an admin account:
 
 ### Planned Features
 - Add configurable audio post-processing (WAV → MP3/FLAC/AAC-LC) with adjustable bitrate
-- In Controls, add an indication of any other users who are currently logged in
 - Note the last date of download for files
 
 ## Built With
@@ -490,5 +492,5 @@ After completing development work, ensure the following are updated:
 
 ---
 
-**Version:** 1.9.0
-**Last Updated:** 2026-02-06
+**Version:** 1.10.0
+**Last Updated:** 2026-02-10

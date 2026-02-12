@@ -40,12 +40,8 @@
                     <span>Completed</span>
                 </div>
                 <div class="flex items-center">
-                    <div class="w-3 h-3 sm:w-4 sm:h-4 bg-yellow-200 border border-yellow-400 rounded mr-1 sm:mr-2"></div>
-                    <span>Missed</span>
-                </div>
-                <div class="flex items-center">
-                    <div class="w-3 h-3 sm:w-4 sm:h-4 bg-red-200 border border-red-400 rounded mr-1 sm:mr-2"></div>
-                    <span>Failed</span>
+                    <div class="w-3 h-3 sm:w-4 sm:h-4 bg-gray-200 border border-gray-400 rounded mr-1 sm:mr-2"></div>
+                    <span>Past Schedule</span>
                 </div>
                 <div class="flex items-center">
                     <div class="w-3 h-3 sm:w-4 sm:h-4 bg-purple-200 border border-purple-400 rounded mr-1 sm:mr-2"></div>
@@ -285,16 +281,14 @@
                             // Use instance status for color
                             if (instance.status === 'completed') {
                                 bgColor = 'bg-green-200 border-green-400';
-                            } else if (instance.status === 'failed') {
-                                bgColor = 'bg-red-200 border-red-400';
-                            } else if (instance.status === 'missed') {
-                                bgColor = 'bg-yellow-200 border-yellow-400';
+                            } else if (instance.status === 'failed' || instance.status === 'missed') {
+                                bgColor = 'bg-gray-200 border-gray-400';
                             } else {
                                 bgColor = 'bg-purple-200 border-purple-400';
                             }
                         } else if (event.is_recurring && !instance && endTime < now) {
-                            // Past recurring occurrence with no instance - likely missed
-                            bgColor = 'bg-yellow-200 border-yellow-400';
+                            // Past recurring occurrence with no instance
+                            bgColor = 'bg-gray-200 border-gray-400';
                         } else if (event.is_recurring) {
                             // Future recurring occurrence
                             bgColor = 'bg-purple-200 border-purple-400';
@@ -305,10 +299,8 @@
                             // Recording time passed - check notes for success/failure
                             if (event.notes && (event.notes.includes('Last executed:') || event.notes.includes('Recording completed'))) {
                                 bgColor = 'bg-green-200 border-green-400'; // Completed successfully
-                            } else if (event.notes && (event.notes.includes('failed') || event.notes.includes('error'))) {
-                                bgColor = 'bg-red-200 border-red-400'; // Failed
                             } else {
-                                bgColor = 'bg-yellow-200 border-yellow-400'; // Missed or unknown
+                                bgColor = 'bg-gray-200 border-gray-400'; // Past schedule
                             }
                         } else {
                             // Currently in recording window
@@ -458,14 +450,10 @@
                     statusText = 'RECORDING COMPLETED';
                     statusClass = 'text-green-600';
                     statusDetails = 'Recording was successful';
-                } else if (instance.status === 'failed') {
-                    statusText = 'RECORDING FAILED';
-                    statusClass = 'text-red-600';
-                    statusDetails = 'Recording encountered an error';
-                } else if (instance.status === 'missed') {
-                    statusText = 'RECORDING MISSED';
-                    statusClass = 'text-yellow-600';
-                    statusDetails = 'Recording did not execute';
+                } else if (instance.status === 'failed' || instance.status === 'missed') {
+                    statusText = 'PAST SCHEDULE';
+                    statusClass = 'text-gray-600';
+                    statusDetails = 'This scheduled recording is in the past';
                 } else {
                     statusText = 'PENDING';
                     statusClass = 'text-blue-600';
@@ -515,20 +503,13 @@
                     statusClass = 'text-gray-600';
 
                     // Check notes for execution information (for non-recurring or legacy data)
-                    if (notesToDisplay) {
-                        if (notesToDisplay.includes('Last executed:') || notesToDisplay.includes('Recording completed')) {
-                            statusClass = 'text-green-600';
-                            statusDetails = 'Recording completed';
-                        } else if (notesToDisplay.includes('failed') || notesToDisplay.includes('error')) {
-                            statusClass = 'text-red-600';
-                            statusDetails = 'Recording failed - see notes';
-                        } else {
-                            statusClass = 'text-yellow-600';
-                            statusDetails = 'Status unknown - check notes';
-                        }
+                    if (notesToDisplay && (notesToDisplay.includes('Last executed:') || notesToDisplay.includes('Recording completed'))) {
+                        statusClass = 'text-green-600';
+                        statusDetails = 'Recording completed';
                     } else {
-                        statusClass = 'text-red-600';
-                        statusDetails = 'No execution record found - recording may have been missed';
+                        statusText = 'PAST SCHEDULE';
+                        statusClass = 'text-gray-600';
+                        statusDetails = 'This scheduled recording is in the past';
                     }
                 }
             }

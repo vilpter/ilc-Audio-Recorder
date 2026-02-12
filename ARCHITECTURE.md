@@ -139,6 +139,22 @@ CREATE TABLE audio_analysis (
 CREATE INDEX idx_analysis_filename ON audio_analysis(filename)
 ```
 
+#### `recording_sections` Table
+```sql
+CREATE TABLE recording_sections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT NOT NULL,
+    label TEXT,
+    start_offset REAL NOT NULL,
+    end_offset REAL,
+    created_at TEXT NOT NULL
+)
+
+CREATE INDEX idx_sections_job_id ON recording_sections(job_id)
+```
+
+Stores section tags created during live recordings. Each section has a start offset (seconds from recording start) and an optional end offset. The `job_id` matches the recording timestamp (e.g., `2026_Feb_10_14:30`) used in audio filenames.
+
 Stores audio analysis results for each channel of recorded files. Analysis is automatically performed 20 seconds after recording completes. Batch analysis also runs when recordings are stopped to catch any previously unanalyzed files.
 
 Fields:
@@ -214,8 +230,10 @@ CREATE TABLE users (
 | GET | `/api/recordings/<filename>` | Download recording file |
 | DELETE | `/api/recordings/<filename>` | Delete recording file |
 | GET | `/api/recordings/<filename>/analysis` | Get audio analysis results |
+| GET | `/api/recordings/<filename>/sections` | Get section tags for a recording |
 | POST | `/api/recordings/batch/delete` | Batch delete recordings |
 | POST | `/api/recordings/batch/download` | Batch download as ZIP |
+| POST | `/api/recording/section` | Mark section beginning or ending during recording |
 
 ### Configuration API
 | Method | Endpoint | Description |

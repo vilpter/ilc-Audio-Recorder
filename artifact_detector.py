@@ -277,7 +277,7 @@ class ArtifactDetector:
                     # Don't double-count events also caught by digital clipping
                     peak = int(np.max(np.abs(samples[run_start:run_start + run_length].astype(np.int32))))
                     if peak < DIGITAL_CLIP_THRESHOLD:
-                        timestamp = (offset_samples + run_start) / self.sample_rate
+                        timestamp = float((offset_samples + run_start) / self.sample_rate)
                         events.append(ClippingEvent(
                             timestamp=timestamp,
                             duration_samples=run_length,
@@ -315,11 +315,11 @@ class ArtifactDetector:
 
         events = []
         for idx in anomalies:
-            timestamp = (offset_samples + idx) / self.sample_rate
+            timestamp = float((offset_samples + idx) / self.sample_rate)
             diff_val = int(diffs[idx])
             events.append(DiscontinuityEvent(
                 timestamp=timestamp,
-                magnitude=abs(diff_val),
+                magnitude=int(abs(diff_val)),
                 direction='positive' if diff_val > 0 else 'negative'
             ))
 
@@ -341,9 +341,9 @@ class ArtifactDetector:
         ends = np.where(changes == -1)[0]
 
         for start, end in zip(starts, ends):
-            run_length = end - start
+            run_length = int(end - start)
             peak = int(samples[start])  # representative value
-            timestamp = (offset_samples + start) / self.sample_rate
+            timestamp = float((offset_samples + start) / self.sample_rate)
             events.append(ClippingEvent(
                 timestamp=timestamp,
                 duration_samples=run_length,

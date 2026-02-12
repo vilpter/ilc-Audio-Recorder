@@ -43,6 +43,42 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Section Tagging (shown only when audio is recording) -->
+            <div id="section-tagging" class="hidden border-t mt-4 pt-4">
+                <h3 class="font-medium text-gray-700 mb-3">Section Tagging</h3>
+
+                <div id="section-idle" class="flex flex-wrap items-center gap-3">
+                    <button onclick="markSectionStart()"
+                        class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded flex items-center text-sm">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Mark Beginning
+                    </button>
+                    <span id="section-count-display" class="text-sm text-gray-500"></span>
+                </div>
+
+                <div id="section-open" class="hidden">
+                    <div class="flex flex-wrap items-center gap-3 mb-3">
+                        <span class="inline-flex items-center text-sm text-blue-600 font-medium">
+                            <span class="w-2 h-2 bg-blue-500 rounded-full animate-pulse mr-2"></span>
+                            Section in progress: <span id="section-current-label" class="ml-1 font-semibold"></span>
+                        </span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <input type="text" id="section-custom-name" placeholder="Custom name (optional)"
+                            class="border border-gray-300 rounded px-3 py-2 text-sm w-48">
+                        <button onclick="markSectionEnd()"
+                            class="bg-gray-700 hover:bg-gray-800 text-white font-medium py-2 px-4 rounded flex items-center text-sm">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Mark Ending
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Unified Recording Controls -->
@@ -376,6 +412,19 @@
                 document.getElementById('start-buttons').classList.toggle('hidden', anyRecording);
                 document.getElementById('stop-buttons').classList.toggle('hidden', !anyRecording);
 
+                // Show/hide section tagging based on audio recording state
+                const sectionTagging = document.getElementById('section-tagging');
+                if (audioStatus.is_recording) {
+                    sectionTagging.classList.remove('hidden');
+                } else {
+                    sectionTagging.classList.add('hidden');
+                    // Reset section state when recording stops
+                    sectionOpen = false;
+                    document.getElementById('section-idle').classList.remove('hidden');
+                    document.getElementById('section-open').classList.add('hidden');
+                    document.getElementById('section-count-display').textContent = '';
+                }
+
                 // Update transcode status
                 const transcodeIdle = document.getElementById('transcode-idle');
                 const transcodeActive = document.getElementById('transcode-active');
@@ -516,6 +565,66 @@
                 updateVideoStatus();
             } catch (error) {
                 alert('Error: ' + error);
+            }
+        }
+
+        // Section tagging
+        let sectionOpen = false;
+
+        async function markSectionStart() {
+            try {
+                const response = await fetch('/api/recording/section', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'start' })
+                });
+                const result = await response.json();
+
+                if (result.error) {
+                    alert(result.error);
+                    return;
+                }
+
+                sectionOpen = true;
+                document.getElementById('section-current-label').textContent = result.label;
+                document.getElementById('section-custom-name').value = '';
+                document.getElementById('section-idle').classList.add('hidden');
+                document.getElementById('section-open').classList.remove('hidden');
+            } catch (error) {
+                alert('Error marking section start: ' + error);
+            }
+        }
+
+        async function markSectionEnd() {
+            const customName = document.getElementById('section-custom-name').value.trim();
+
+            try {
+                const body = { type: 'end' };
+                if (customName) {
+                    body.label = customName;
+                }
+
+                const response = await fetch('/api/recording/section', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const result = await response.json();
+
+                if (result.error) {
+                    alert(result.error);
+                    return;
+                }
+
+                sectionOpen = false;
+                document.getElementById('section-idle').classList.remove('hidden');
+                document.getElementById('section-open').classList.add('hidden');
+                document.getElementById('section-count-display').textContent = 'Section marked';
+                setTimeout(() => {
+                    document.getElementById('section-count-display').textContent = '';
+                }, 2000);
+            } catch (error) {
+                alert('Error marking section end: ' + error);
             }
         }
 

@@ -183,6 +183,23 @@ def init_database():
             except sqlite3.OperationalError:
                 pass  # Column already exists
 
+        # Recording sections table for section tagging during live recording
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS recording_sections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id TEXT NOT NULL,
+                label TEXT,
+                start_offset REAL NOT NULL,
+                end_offset REAL,
+                created_at TEXT NOT NULL
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_sections_job_id
+            ON recording_sections(job_id)
+        ''')
+
         # Set default audio device to auto-detect
         cursor.execute('''
             INSERT OR IGNORE INTO system_config (key, value, updated_at)
@@ -1028,6 +1045,84 @@ def set_system_config(key, value):
         INSERT OR REPLACE INTO system_config (key, value, updated_at)
         VALUES (?, ?, datetime('now'))
     ''', (key, value), commit=True)
+
+
+def create_recording_section(job_id, label, start_offset):
+    """Create a new recording section tag."""
+    def _insert(conn, cursor):
+        cursor.execute('''
+            INSERT INTO recording_sections (job_id, label, start_offset, created_at)
+            VALUES (?, ?, ?, datetime('now'))
+        ''', (job_id, label, start_offset))
+        return cursor.lastrowid
+
+    return db_utils.execute_transaction(DB_PATH, _insert)
+
+
+def close_recording_section(job_id, end_offset, label=None):
+    """Close the most recent open section for a job."""
+    def _update(conn, cursor):
+        # Find the most recent open section
+        cursor.execute('''
+            SELECT id FROM recording_sections
+            WHERE job_id = ? AND end_offset IS NULL
+            ORDER BY id DESC LIMIT 1
+        ''', (job_id,))
+        row = cursor.fetchone()
+        if not row:
+            return False
+        section_id = row[0]
+
+        if label:
+            cursor.execute('''
+                UPDATE recording_sections SET end_offset = ?, label = ? WHERE id = ?
+            ''', (end_offset, label, section_id))
+        else:
+            cursor.execute('''
+                UPDATE recording_sections SET end_offset = ? WHERE id = ?
+            ''', (end_offset, section_id))
+        return True
+
+    return db_utils.execute_transaction(DB_PATH, _update)
+
+
+def get_sections_for_recording(job_id):
+    """Get all sections for a recording by job_id."""
+    rows = db_utils.fetch_all(DB_PATH, '''
+        SELECT id, job_id, label, start_offset, end_offset, created_at
+        FROM recording_sections
+        WHERE job_id = ?
+        ORDER BY start_offset ASC
+    ''', (job_id,))
+
+    return [
+        {
+            'id': row[0],
+            'job_id': row[1],
+            'label': row[2],
+            'start_offset': row[3],
+            'end_offset': row[4],
+            'created_at': row[5]
+        }
+        for row in rows
+    ]
+
+
+def get_section_count_for_recording(job_id):
+    """Get count of sections for a recording (for auto-numbering)."""
+    row = db_utils.fetch_one(DB_PATH, '''
+        SELECT COUNT(*) FROM recording_sections WHERE job_id = ?
+    ''', (job_id,))
+    return row[0] if row else 0
+
+
+def has_open_section(job_id):
+    """Check if a recording has an unclosed section."""
+    row = db_utils.fetch_one(DB_PATH, '''
+        SELECT COUNT(*) FROM recording_sections
+        WHERE job_id = ? AND end_offset IS NULL
+    ''', (job_id,))
+    return row[0] > 0 if row else False
 
 
 # Initialize database on module import

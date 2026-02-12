@@ -22,7 +22,7 @@ import auth
 import db_utils
 import validation
 
-__version__ = '1.9.3'
+__version__ = '1.10.0'
 
 app = Flask(__name__)
 
@@ -558,6 +558,76 @@ def stop_recording():
         'audio_stopped': audio_stopped,
         'video_stopped': video_stopped
     })
+
+
+@app.route('/api/recording/section', methods=['POST'])
+@login_required
+def mark_recording_section():
+    """Create or close a section tag in the current recording."""
+    if not recording_status['is_recording']:
+        return jsonify({'error': 'No audio recording in progress'}), 400
+
+    data = request.json or {}
+    section_type = data.get('type')
+    label = data.get('label', '').strip() or None
+
+    if section_type not in ('start', 'end'):
+        return jsonify({'error': 'type must be "start" or "end"'}), 400
+
+    job_id = recording_status['current_job']
+    start_time_str = recording_status['start_time']
+
+    if not job_id or not start_time_str:
+        return jsonify({'error': 'Recording state incomplete'}), 500
+
+    # Calculate offset in seconds from recording start
+    start_time = datetime.fromisoformat(start_time_str)
+    offset = (datetime.now() - start_time).total_seconds()
+
+    if section_type == 'start':
+        if scheduler.has_open_section(job_id):
+            return jsonify({'error': 'A section is already open. Mark its ending first.'}), 400
+
+        count = scheduler.get_section_count_for_recording(job_id)
+        auto_label = f'Section {count + 1}'
+        section_id = scheduler.create_recording_section(job_id, auto_label, offset)
+
+        return jsonify({
+            'success': True,
+            'section_id': section_id,
+            'label': auto_label,
+            'start_offset': offset
+        })
+    else:
+        if not scheduler.has_open_section(job_id):
+            return jsonify({'error': 'No open section to close'}), 400
+
+        closed = scheduler.close_recording_section(job_id, offset, label)
+        if closed:
+            return jsonify({'success': True, 'end_offset': offset})
+        else:
+            return jsonify({'error': 'Failed to close section'}), 500
+
+
+@app.route('/api/recordings/<filename>/sections')
+@login_required
+def get_recording_sections(filename):
+    """Get all sections for a recording by matching job_id from filename."""
+    import re
+    # Extract job_id from filename (strip channel suffix)
+    # Filename format: YYYY_MMM_DD_HH:MM_SUFFIX.wav
+    left_suffix = scheduler.get_system_config('channel_left_suffix', 'L')
+    right_suffix = scheduler.get_system_config('channel_right_suffix', 'R')
+    pattern = rf'^(.+?)_(?:{re.escape(left_suffix)}|{re.escape(right_suffix)})\.wav$'
+    match = re.match(pattern, filename)
+
+    if not match:
+        return jsonify({'sections': []})
+
+    job_id = match.group(1)
+    sections = scheduler.get_sections_for_recording(job_id)
+
+    return jsonify({'sections': sections, 'job_id': job_id})
 
 
 @app.route('/api/schedule', methods=['POST'])

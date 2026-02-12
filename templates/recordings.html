@@ -425,7 +425,7 @@
 
             // Check cache first
             if (analysisCache[filename]) {
-                displayAnalysisModal(analysisCache[filename], loading, errorDiv, dataDiv);
+                await displayAnalysisModal(analysisCache[filename], loading, errorDiv, dataDiv);
                 return;
             }
 
@@ -437,7 +437,7 @@
                 // Cache result
                 analysisCache[filename] = data;
 
-                displayAnalysisModal(data, loading, errorDiv, dataDiv);
+                await displayAnalysisModal(data, loading, errorDiv, dataDiv);
             } catch (err) {
                 loading.classList.add('hidden');
                 errorDiv.querySelector('p').textContent = 'Failed to load analysis';
@@ -445,7 +445,7 @@
             }
         }
 
-        function displayAnalysisModal(data, loading, errorDiv, dataDiv) {
+        async function displayAnalysisModal(data, loading, errorDiv, dataDiv) {
             loading.classList.add('hidden');
 
             if (!data.analyzed) {
@@ -500,6 +500,36 @@
                     </div>`;
                 }
             });
+
+            // Fetch and display recording sections
+            const filename = document.getElementById('analysis-filename').textContent;
+            try {
+                const sectionsResponse = await fetch(`/api/recordings/${encodeURIComponent(filename)}/sections`);
+                const sectionsData = await sectionsResponse.json();
+
+                if (sectionsData.sections && sectionsData.sections.length > 0) {
+                    html += `<div class="p-4 bg-blue-50 border border-blue-200 rounded">
+                        <div class="font-semibold text-gray-900 mb-3">Recording Sections</div>
+                        <div class="space-y-2">`;
+
+                    sectionsData.sections.forEach(section => {
+                        const startTime = formatTime(section.start_offset);
+                        const endTime = section.end_offset !== null ? formatTime(section.end_offset) : 'Open';
+                        const duration = section.end_offset !== null
+                            ? formatDuration(section.end_offset - section.start_offset)
+                            : '--';
+
+                        html += `<div class="flex items-center justify-between p-2 bg-white rounded border text-sm">
+                            <span class="font-medium">${section.label || 'Unnamed'}</span>
+                            <span class="text-gray-600">${startTime} &ndash; ${endTime} (${duration})</span>
+                        </div>`;
+                    });
+
+                    html += `</div></div>`;
+                }
+            } catch (err) {
+                console.error('Error loading sections:', err);
+            }
 
             dataDiv.innerHTML = html;
             dataDiv.classList.remove('hidden');

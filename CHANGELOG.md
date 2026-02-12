@@ -2,6 +2,26 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.10.0] - 2026-02-10
+
+### Added
+- **Section Tagging** - Mark beginning and ending of segments during live recording for post-processing reference
+  - "Mark Beginning" and "Mark Ending" buttons appear in the Control page during active audio recording
+  - Sections are auto-numbered (Section 1, Section 2, etc.) with optional custom naming before marking the ending
+  - Section tags (start time, end time, label) displayed in the Audio Analysis modal on the Recordings page
+  - New `recording_sections` database table with `job_id`, `label`, `start_offset`, `end_offset`
+  - New API endpoints: `POST /api/recording/section` and `GET /api/recordings/<filename>/sections`
+
+### Changed
+- **Calendar status simplification** - Merged "Missed" (yellow) and "Failed" (red) calendar statuses into a single "Past Schedule" (gray) status for cleaner visual presentation
+  - Calendar legend updated from 6 entries to 5
+  - Event detail panel shows unified "PAST SCHEDULE" label for all non-completed past events
+
+### Fixed
+- **Audio analysis JSON serialization error** - Fixed "Object of type int64 is not JSON serializable" crash when viewing analysis for recordings with many clipping or discontinuity artifacts. NumPy integer and float types in artifact detection are now explicitly cast to native Python types before JSON serialization.
+
+---
+
 ## [1.9.3] - 2026-02-07
 
 ### Fixed
