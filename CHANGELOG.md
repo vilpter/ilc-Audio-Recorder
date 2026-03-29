@@ -2,6 +2,13 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.10.1] - 2026-03-29
+
+### Fixed
+- **Section marking unavailable during scheduled recordings** - "Mark Beginning" button triggered a "Recording state incomplete" error during scheduled recordings. Scheduled recordings start the audio capture directly via the scheduler, bypassing the Flask route that populates `recording_status`. The scheduler now updates `recording_status` after a successful start, matching the behavior of manually initiated recordings.
+
+---
+
 ## [1.10.0] - 2026-02-10
 
 ### Added

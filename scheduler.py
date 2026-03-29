@@ -899,6 +899,13 @@ def _execute_scheduled_recording(job_id, duration, allow_override=False, capture
         recorder.start_capture(duration, allow_override=allow_override)
         logger.info(f"Job {job_id}: recorder.start_capture() returned successfully")
 
+        # Sync recording_status so section marking (/api/recording/section) works.
+        # Manual recordings set these in the Flask route; scheduled recordings bypass it.
+        from app import recording_status
+        recording_status['is_recording'] = True
+        recording_status['current_job'] = job_id
+        recording_status['start_time'] = datetime.now().isoformat()
+
         # Start video recording if requested
         if capture_video:
             try:
