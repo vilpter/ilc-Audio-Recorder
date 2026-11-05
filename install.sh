@@ -73,6 +73,14 @@ confirm() {
     [[ "$reply" =~ ^[Yy] ]]
 }
 
+ask() {
+    # ask "question" default  -> prints the answer (the default with --yes or empty input)
+    local prompt="$1" default="$2" reply
+    if [ "$ASSUME_YES" = true ]; then echo "$default"; return; fi
+    read -r -p "  $prompt [$default]: " reply
+    echo "${reply:-$default}"
+}
+
 as_service() { sudo -u "$SERVICE_USER" "$@"; }
 
 usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; }
@@ -259,7 +267,9 @@ venv_current() {
         && [ -f "$MARKER" ] && [ "$(head -1 "$MARKER")" = "$LOCK_ID" ]
 }
 
-pip_venv() { sudo "$VENV_DIR/bin/python" -m pip --disable-pip-version-check --no-input --quiet "$@"; }
+# -qq: errors only. pip's warnings here are noise for this use (e.g. deprecation
+# notices about decade-old pytz wheel names it sees on the package index).
+pip_venv() { sudo "$VENV_DIR/bin/python" -m pip --disable-pip-version-check --no-input -qq "$@"; }
 
 if venv_current; then
     ok "Dependencies unchanged ($(sed -n 2p "$MARKER"))"
@@ -347,56 +357,165 @@ STORAGE="${STORAGE:-$DEFAULT_STORAGE}"
 info "Configured path: $STORAGE"
 
 first_blocking_parent() {
-    # Print the top-most ancestor the service account cannot traverse, if any
+    # Print the top-most existing ancestor the service account cannot traverse, if any
     local dir
     dir="$(dirname "$1")"
     while [ "$dir" != "/" ]; do
-        if ! as_service test -x "$dir" 2>/dev/null; then echo "$dir"; fi
+        if sudo test -d "$dir" && ! as_service test -x "$dir" 2>/dev/null; then echo "$dir"; fi
         dir="$(dirname "$dir")"
     done | tail -1
 }
 
 storage_writable() { as_service test -d "$1" -a -w "$1" -a -x "$1" 2>/dev/null; }
 
-if ! sudo test -e "$STORAGE"; then
-    sudo install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 2775 "$STORAGE"
-    ok "Created $STORAGE"
-    if ! mountpoint -q "$STORAGE" && [[ "$STORAGE" == /mnt/* || "$STORAGE" == /media/* ]]; then
-        info "Note: $STORAGE is a plain directory, not a mounted drive"
+is_mount_permission_fs() {
+    case "$(findmnt -n -o FSTYPE --target "$1" 2>/dev/null)" in
+        vfat|msdos|exfat|ntfs|ntfs3|fuseblk) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+fstab_note() {
+    # Instructions for a FAT/exFAT/NTFS drive, whose permissions come from mount options
+    local mnt fstype
+    mnt="$(findmnt -n -o TARGET --target "$1")"
+    fstype="$(findmnt -n -o FSTYPE --target "$1")"
+    echo "Recordings drive ($fstype, mounted at $mnt) is not writable by '$SERVICE_USER'. In /etc/fstab, set the options for $mnt to include  uid=$(id -u "$SERVICE_USER"),gid=$(id -g "$SERVICE_USER"),umask=0002  (replacing any uid=/gid=/umask=), then:  sudo umount $mnt && sudo mount $mnt && sudo systemctl restart $SERVICE_NAME"
+}
+
+grant_group_access() {
+    # Let the service group read and write $1 and everything in it; new files inherit the group
+    sudo chgrp -R "$SERVICE_USER" "$1"
+    sudo chmod -R g+rwX "$1"
+    sudo find "$1" -type d -exec chmod g+s {} +
+}
+
+save_storage_setting() {
+    # Store the recordings directory in the app's settings (the service is stopped here)
+    as_service "$VENV_DIR/bin/python" - "$STATE_DIR/schedule.db" "$1" <<'PY' 2>/dev/null
+import sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute("INSERT OR REPLACE INTO system_config (key, value, updated_at) "
+            "VALUES ('storage_path', ?, datetime('now'))", (sys.argv[2],))
+con.commit()
+PY
+}
+
+relocate_storage() {
+    # Move the contents of $1 into $2, make $2 usable by the service and select it
+    # in Settings. Existing files in $2 are never overwritten. Returns non-zero, with
+    # the reason in RELOCATE_ERROR, if nothing was moved.
+    local src="$1" tgt="$2" blocker needed avail moved=0 skipped=0 entry name
+    RELOCATE_ERROR=""
+    tgt="${tgt%/}"
+    if [[ "$tgt" != /* ]]; then
+        RELOCATE_ERROR="'$tgt' is not an absolute path"; return 1
+    fi
+    if [ "$tgt" = "$src" ] || [[ "$tgt/" == "$src/"* ]]; then
+        RELOCATE_ERROR="'$tgt' is inside the current recordings directory"; return 1
+    fi
+    blocker="$(first_blocking_parent "$tgt/x")"
+    if [ -n "$blocker" ]; then
+        RELOCATE_ERROR="'$SERVICE_USER' cannot enter $blocker either"; return 1
+    fi
+    if ! sudo test -e "$tgt"; then
+        sudo install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 2775 "$tgt"
+        ok "Created $tgt"
+        if ! mountpoint -q "$tgt" && [[ "$tgt" == /mnt/* || "$tgt" == /media/* ]]; then
+            info "Note: $tgt is a plain directory on the system disk, not a mounted drive"
+        fi
+    elif ! sudo test -d "$tgt"; then
+        RELOCATE_ERROR="'$tgt' exists and is not a directory"; return 1
+    fi
+    if ! storage_writable "$tgt"; then
+        if is_mount_permission_fs "$tgt"; then
+            RELOCATE_ERROR="$(fstab_note "$tgt")"; return 1
+        fi
+        sudo chgrp "$SERVICE_USER" "$tgt"
+        sudo chmod g+rwxs "$tgt"
+        storage_writable "$tgt" || { RELOCATE_ERROR="could not make $tgt writable"; return 1; }
+    fi
+
+    if sudo test -d "$src"; then
+        # Moving within one filesystem is a rename; across filesystems it copies, so check space
+        if [ "$(sudo stat -c %d "$src")" != "$(sudo stat -c %d "$tgt")" ]; then
+            needed="$(sudo du -sb "$src" | cut -f1)"
+            avail="$(df --output=avail -B1 "$tgt" | tail -1 | tr -d ' ')"
+            if [ "$needed" -gt "$avail" ]; then
+                RELOCATE_ERROR="$tgt has $((avail / 1048576)) MB free, recordings need $((needed / 1048576)) MB"
+                return 1
+            fi
+        fi
+        while IFS= read -r -d '' entry; do
+            name="$(basename "$entry")"
+            if sudo test -e "$tgt/$name"; then
+                skipped=$((skipped + 1))
+                warn "Not moved (already exists in $tgt): $name"
+            elif sudo mv "$entry" "$tgt/"; then
+                moved=$((moved + 1))
+            else
+                skipped=$((skipped + 1))
+            fi
+        done < <(sudo find "$src" -mindepth 1 -maxdepth 1 -print0)
+    fi
+    grant_group_access "$tgt"
+    ok "Moved $moved item(s) from $src to $tgt"
+
+    if save_storage_setting "$tgt"; then
+        ok "Settings → Storage Location is now $tgt"
+    else
+        warn "Could not update the storage setting; set Settings → Storage Location to $tgt"
+    fi
+    if [ "$skipped" -gt 0 ]; then
+        STORAGE_NOTE="$skipped item(s) were left in $src because they could not be moved (see above)."
+    elif sudo test -d "$src"; then
+        info "$src is now empty; you can remove it:  rmdir $src"
+    fi
+    return 0
+}
+
+BLOCKER="$(first_blocking_parent "$STORAGE")"
+if [ -n "$BLOCKER" ]; then
+    warn "'$SERVICE_USER' cannot reach $STORAGE: no access to $BLOCKER"
+    if confirm "Move the recordings to a directory the service can use?"; then
+        TARGET="$(ask "New recordings directory" "$DEFAULT_STORAGE")"
+        if relocate_storage "$STORAGE" "$TARGET"; then
+            STORAGE="${TARGET%/}"
+        else
+            warn "Recordings not moved: $RELOCATE_ERROR"
+        fi
+    fi
+    if [ -n "$(first_blocking_parent "$STORAGE")" ]; then
+        STORAGE_NOTE="Recordings directory $STORAGE is inside $BLOCKER, which the service cannot enter. Re-run ./install.sh --upgrade to move it, or move it yourself and update Settings → Storage Location."
     fi
 fi
 
-if storage_writable "$STORAGE"; then
-    ok "'$SERVICE_USER' can write to $STORAGE"
-else
-    BLOCKER="$(first_blocking_parent "$STORAGE")"
-    FSTYPE="$(findmnt -n -o FSTYPE --target "$STORAGE" 2>/dev/null || echo unknown)"
-    if [ -n "$BLOCKER" ]; then
-        warn "'$SERVICE_USER' cannot reach $STORAGE: no access to $BLOCKER"
-        STORAGE_NOTE="Recordings directory $STORAGE is inside $BLOCKER, which the service cannot enter. Move recordings to a location such as $DEFAULT_STORAGE and update Settings → Storage Location."
+if [ -z "$(first_blocking_parent "$STORAGE")" ]; then
+    if ! sudo test -e "$STORAGE"; then
+        sudo install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 2775 "$STORAGE"
+        ok "Created $STORAGE"
+        if ! mountpoint -q "$STORAGE" && [[ "$STORAGE" == /mnt/* || "$STORAGE" == /media/* ]]; then
+            info "Note: $STORAGE is a plain directory on the system disk, not a mounted drive"
+        fi
+    fi
+
+    if storage_writable "$STORAGE"; then
+        ok "'$SERVICE_USER' can write to $STORAGE"
+    elif is_mount_permission_fs "$STORAGE"; then
+        warn "$STORAGE is on a $(findmnt -n -o FSTYPE --target "$STORAGE") drive; its permissions come from mount options"
+        STORAGE_NOTE="$(fstab_note "$STORAGE")"
     else
-        case "$FSTYPE" in
-            vfat|msdos|exfat|ntfs|ntfs3|fuseblk)
-                MNT="$(findmnt -n -o TARGET --target "$STORAGE")"
-                warn "$STORAGE is on a $FSTYPE drive; its permissions come from mount options"
-                STORAGE_NOTE="Recordings drive ($FSTYPE, mounted at $MNT) is not writable by '$SERVICE_USER'. In /etc/fstab, set the options for $MNT to include  uid=$(id -u "$SERVICE_USER"),gid=$(id -g "$SERVICE_USER"),umask=0002  (replacing any uid=/gid=/umask=), then:  sudo umount $MNT && sudo mount $MNT && sudo systemctl restart $SERVICE_NAME"
-                ;;
-            *)
-                warn "'$SERVICE_USER' cannot write to $STORAGE"
-                if confirm "Give the '$SERVICE_USER' group write access to $STORAGE and its contents?"; then
-                    sudo chgrp -R "$SERVICE_USER" "$STORAGE"
-                    sudo chmod -R g+rwX "$STORAGE"
-                    sudo find "$STORAGE" -type d -exec chmod g+s {} +
-                    if storage_writable "$STORAGE"; then
-                        ok "'$SERVICE_USER' can write to $STORAGE"
-                    else
-                        STORAGE_NOTE="Recordings directory $STORAGE is still not writable by '$SERVICE_USER'; check its permissions."
-                    fi
-                else
-                    STORAGE_NOTE="Recordings directory $STORAGE is not writable by '$SERVICE_USER'. Recording will fail until it is."
-                fi
-                ;;
-        esac
+        warn "'$SERVICE_USER' cannot write to $STORAGE"
+        if confirm "Give the '$SERVICE_USER' group write access to $STORAGE and its contents?"; then
+            grant_group_access "$STORAGE"
+            if storage_writable "$STORAGE"; then
+                ok "'$SERVICE_USER' can write to $STORAGE"
+            else
+                STORAGE_NOTE="Recordings directory $STORAGE is still not writable by '$SERVICE_USER'; check its permissions."
+            fi
+        else
+            STORAGE_NOTE="Recordings directory $STORAGE is not writable by '$SERVICE_USER'. Recording will fail until it is."
+        fi
     fi
 fi
 

@@ -2,6 +2,18 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.12.2] - 2026-11-04
+
+### Added
+- **Move recordings out of unreachable locations** - When the configured recordings directory is somewhere the service account cannot enter (such as a 0700 home directory), `install.sh` offers to move its contents to a directory you choose (default `/mnt/usb_recorder`). It checks the destination is reachable and writable and, when it is on another drive, that it has enough free space. Files already in the destination are never overwritten and are reported. It then grants the `audio-recorder` group access and updates Settings → Storage Location. Analysis results and section marks stay linked, since they are stored by filename.
+
+### Changed
+- **Quieter dependency install** - pip now prints errors only, so harmless warnings (such as deprecation notices about old `pytz` wheel names on the package index) no longer flood the installer output.
+
+### Fixed
+- **Dashboard and Recordings pages showed `/home/pi/recordings`** regardless of the configured location. They now show Settings → Storage Location.
+- **Docs pointed at `~/recordings`** - QUICKSTART and README troubleshooting now refer to the configured location (default `/mnt/usb_recorder`).
+
 ## [1.12.1] - 2026-11-04
 
 ### Fixed

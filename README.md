@@ -142,7 +142,11 @@ audio device), `--yes` (no prompts).
 - **Recordings directory:** the installer checks that the service account can write
   to the configured storage path. On ext4 and similar drives it offers to grant the
   `audio-recorder` group access. FAT/exFAT drives get their permissions from mount
-  options, so the installer prints the `/etc/fstab` change to make.
+  options, so the installer prints the `/etc/fstab` change to make. If the path is
+  somewhere the service can't reach (such as inside your home directory), the
+  installer offers to move the recordings to a directory you choose (default
+  `/mnt/usb_recorder`). It checks the destination has room, never overwrites a file
+  already there, sets permissions and updates Settings → Storage Location.
 - **Your user** is added to the `audio-recorder` group so you can read logs and
   manage recordings (log out and back in once for this to apply).
 - **Upgrading from before 1.12.0:** data in `~/.audio-recorder` is copied to
@@ -369,7 +373,7 @@ curl http://localhost:5000
 
 1. **Check disk space:**
    ```bash
-   df -h ~/recordings
+   df -h /mnt/usb_recorder    # or your Settings → Storage Location
    ```
 
 2. **Test FFmpeg manually:**
@@ -506,5 +510,5 @@ After completing development work, ensure the following are updated:
 
 ---
 
-**Version:** 1.12.1
+**Version:** 1.12.2
 **Last Updated:** 2026-11-04

@@ -23,7 +23,7 @@ import config
 import db_utils
 import validation
 
-__version__ = '1.12.1'
+__version__ = '1.12.2'
 
 app = Flask(__name__)
 
@@ -113,6 +113,15 @@ def get_recordings_dir():
     recordings_dir = Path(storage_path)
     recordings_dir.mkdir(parents=True, exist_ok=True)
     return recordings_dir
+
+
+@app.context_processor
+def inject_storage_path():
+    """Make the configured recordings directory available to all templates"""
+    try:
+        return {'storage_path': scheduler.get_system_config('storage_path', '/mnt/usb_recorder')}
+    except Exception:
+        return {'storage_path': '(unavailable)'}
 
 
 # Global status tracker for audio (shared with the scheduler via recorder module)

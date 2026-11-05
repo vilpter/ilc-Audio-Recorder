@@ -89,7 +89,7 @@
             <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
                 <h3 class="font-semibold text-blue-900 mb-2">Storage Info</h3>
                 <p class="text-sm text-blue-800">
-                    Recordings are stored in: <code class="bg-blue-100 px-2 py-1 rounded">/home/pi/recordings/</code>
+                    Recordings are stored in: <code class="bg-blue-100 px-2 py-1 rounded">{{ storage_path }}</code>
                 </p>
                 <p class="text-sm text-blue-800 mt-1">
                     Total files size: <strong>{{ (files | map(attribute='size') | sum / 1024 / 1024) | round(2) }} MB</strong>

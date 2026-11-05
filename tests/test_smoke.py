@@ -73,3 +73,14 @@ def test_directory_browser_creates(logged_in, _storage_dir):
                           json={'parent_path': str(_storage_dir), 'folder_name': 'new_folder'})
     assert resp.status_code in (200, 409), resp.get_json()
     assert (_storage_dir / 'new_folder').is_dir()
+
+
+def test_recordings_page_shows_configured_storage_path(logged_in, _storage_dir):
+    wav = _storage_dir / '2026_Jan_01_10:00_L.wav'
+    wav.write_bytes(b'RIFF')
+    try:
+        html = logged_in.get('/recordings').get_data(as_text=True)
+    finally:
+        wav.unlink()
+    assert str(_storage_dir) in html
+    assert '/home/pi/recordings' not in html

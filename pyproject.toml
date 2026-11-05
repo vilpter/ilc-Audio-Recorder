@@ -1,6 +1,6 @@
 [project]
 name = "ilc-audio-recorder"
-version = "1.12.1"
+version = "1.12.2"
 description = "Raspberry Pi dual-mono audio recorder with scheduling and PTZ camera capture"
 readme = "README.md"
 license = { file = "LICENSE" }

@@ -37,7 +37,7 @@ The installer:
 - Installs pinned Python packages into `/opt/audio-recorder/.venv` (never the system Python)
 - Keeps data in `/var/lib/audio-recorder` and logs in `/var/log/audio-recorder`
   (installs from before 1.12.0 are migrated from `~/.audio-recorder`)
-- Checks the recordings directory is writable by the service and tells you how to fix it if not
+- Checks the recordings directory is writable by the service and tells you how to fix it if not, or offers to move recordings out of a location the service can't reach
 - Installs ALSA configuration and the systemd service
 
 See the README's *What the installer sets up* section for details.
@@ -60,14 +60,14 @@ http://YOUR_PI_IP:5000
 2. Click on a day to create a schedule
 3. Set duration (default: 1 hour)
 4. Click **Create Recording**
-5. Audio files will be saved to `~/recordings/`
+5. Audio files are saved to the recordings directory (Settings → Storage Location; default `/mnt/usb_recorder`)
 
 ### Immediate Recording
 
 1. Go to **New/In Progress** page
 2. Set duration (minutes)
 3. Click **Audio Only**, **Video Only**, or **Audio + Video**
-4. Audio files save to `~/recordings/`, video to USB storage
+4. Audio and video files save to the recordings directory (Settings → Storage Location)
 
 ### First Video Recording (Optional)
 
@@ -151,7 +151,7 @@ tail -f /var/log/audio-recorder/app.log
 
 **Find recordings:**
 ```bash
-ls -lh ~/recordings/
+ls -lh /mnt/usb_recorder/    # or your Settings → Storage Location
 ```
 
 ### Configuration

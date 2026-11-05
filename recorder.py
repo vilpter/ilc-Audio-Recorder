@@ -744,6 +744,6 @@ if __name__ == '__main__':
         job_id = start_capture(duration_seconds=10)
         print(f"Recording started: {job_id}")
         time.sleep(11)  # Wait for completion
-        print("Recording should be complete. Check ~/recordings/")
+        print(f"Recording should be complete. Check {get_recording_path()['directory']}")
     except Exception as e:
         print(f"Error: {e}")
