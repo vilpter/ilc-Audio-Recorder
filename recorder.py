@@ -17,12 +17,13 @@ import threading
 import time
 import scheduler
 import db_utils
+import config
 
 # Log file paths (exported for Settings page)
-LOG_DIR = Path.home() / '.audio-recorder'
-LOG_DIR.mkdir(exist_ok=True)
-RECORDER_LOG_PATH = LOG_DIR / 'recorder.log'
-FFMPEG_LOG_PATH = LOG_DIR / 'ffmpeg.log'
+config.ensure_dirs()
+LOG_DIR = config.LOG_DIR
+RECORDER_LOG_PATH = config.RECORDER_LOG_PATH
+FFMPEG_LOG_PATH = config.FFMPEG_LOG_PATH
 
 # Configure logging for device detection troubleshooting
 # Use local time for timestamps (not UTC)
@@ -146,8 +147,7 @@ recording_status = {
 def load_channel_suffixes():
     """Load channel suffix configuration from database"""
     try:
-        from pathlib import Path as PPath
-        db_path = PPath.home() / '.audio-recorder' / 'schedule.db'
+        db_path = config.SCHEDULE_DB_PATH
 
         if not db_path.exists():
             return 'L', 'R'  # Defaults if DB doesn't exist yet

@@ -11,9 +11,10 @@ from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin
 import db_utils
+import config
 
 # Database path - same directory as scheduler database
-AUTH_DB_PATH = Path.home() / '.audio-recorder' / 'auth.db'
+AUTH_DB_PATH = config.AUTH_DB_PATH
 
 # User roles - defines permission levels
 ROLE_VIEWER = 'viewer'      # No Settings access
@@ -259,7 +260,7 @@ def init_auth_db():
 
 def generate_secret_key():
     """Generate a secure secret key for Flask sessions"""
-    secret_key_path = Path.home() / '.audio-recorder' / 'secret_key'
+    secret_key_path = config.SECRET_KEY_PATH
 
     if secret_key_path.exists():
         return secret_key_path.read_text().strip()

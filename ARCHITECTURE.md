@@ -317,7 +317,10 @@ church-recording/
 ├── video_recorder.py         # Video capture and camera control
 ├── scheduler.py              # Job scheduling (APScheduler)
 ├── auth.py                   # User authentication
+├── config.py                 # State, log and backup paths (env-overridable)
 ├── requirements.txt          # Python dependencies
+├── requirements-dev.txt      # Test dependencies (pytest)
+├── tests/                    # pytest suite
 ├── audio-recorder.service    # systemd service file
 ├── install.sh                # Automated installer
 ├── fix_service.sh            # Service repair script
@@ -356,6 +359,15 @@ church-recording/
 | FFmpeg logs | `~/.audio-recorder/ffmpeg.log` | FFmpeg stderr output |
 | Service file | `/etc/systemd/system/audio-recorder.service` | Installed by install.sh |
 
+All state and log paths are defined in `config.py`. The defaults above can be
+overridden with environment variables (for example in the systemd unit):
+
+| Variable | Default | Controls |
+|----------|---------|----------|
+| `AUDIO_RECORDER_STATE_DIR` | `~/.audio-recorder` | Databases, secret key, `backups/` |
+| `AUDIO_RECORDER_LOG_DIR` | state directory | recorder, scheduler and FFmpeg logs |
+| `AUDIO_RECORDER_SERVICE_LOG_DIR` | `/var/log/audio-recorder` | app/error log paths shown in Settings |
+
 ---
 
 ## Backup Files
@@ -371,9 +383,9 @@ church-recording/
 - Audio device, channel suffixes, camera settings
 
 ### Backup Location
-Pre-import backups are stored in `~/.audio-recorder/`:
-- `schedule_backup.sched` - Auto-created before schedule import
-- `config_backup.conf` - Auto-created before config import
+Pre-import backups are stored in `~/.audio-recorder/backups/` (`config.BACKUP_DIR`):
+- `schedules.sched.last` - Auto-created before schedule import
+- `config.conf.last` - Auto-created before config import
 
 ### One-Click Revert
 If import causes issues, use Settings → Revert to restore from automatic backup.

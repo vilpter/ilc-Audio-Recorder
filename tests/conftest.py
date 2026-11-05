@@ -1,9 +1,9 @@
 """
 Test fixtures.
 
-The app modules create state under Path.home()/.audio-recorder and start the
-APScheduler at import time, so HOME is redirected to a temp directory before
-anything is imported.
+The app modules create their state directory and start the APScheduler at
+import time, so the state directory (and HOME, as a backstop) is redirected to
+a temp directory before anything is imported.
 """
 import logging
 import os
@@ -13,6 +13,8 @@ from pathlib import Path
 
 _TEST_HOME = tempfile.mkdtemp(prefix='audio-recorder-test-home-')
 os.environ['HOME'] = _TEST_HOME
+os.environ['AUDIO_RECORDER_STATE_DIR'] = os.path.join(_TEST_HOME, 'state')
+os.environ['AUDIO_RECORDER_SERVICE_LOG_DIR'] = os.path.join(_TEST_HOME, 'service-logs')
 
 # The app logs to sys.stderr from the scheduler thread; once pytest closes its
 # captured stream those writes fail noisily at teardown. Silence that noise.

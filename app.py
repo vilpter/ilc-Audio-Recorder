@@ -19,10 +19,11 @@ import recorder
 import video_recorder
 import scheduler
 import auth
+import config
 import db_utils
 import validation
 
-__version__ = '1.10.2'
+__version__ = '1.11.0'
 
 app = Flask(__name__)
 
@@ -1499,17 +1500,7 @@ def test_audio_device():
 # Log Viewer API
 def _get_log_file_path(log_type):
     """Get the file path for a given log type"""
-    home_log_dir = Path.home() / '.audio-recorder'
-    var_log_dir = Path('/var/log/audio-recorder')
-
-    log_paths = {
-        'app': var_log_dir / 'app.log',
-        'error': var_log_dir / 'error.log',
-        'recorder': home_log_dir / 'recorder.log',
-        'scheduler': home_log_dir / 'scheduler.log',
-        'ffmpeg': home_log_dir / 'ffmpeg.log'
-    }
-    return log_paths.get(log_type, var_log_dir / f'{log_type}.log')
+    return config.LOG_PATHS.get(log_type, config.SERVICE_LOG_DIR / f'{log_type}.log')
 
 
 @app.route('/api/logs/paths', methods=['GET'])
@@ -1517,16 +1508,7 @@ def _get_log_file_path(log_type):
 @full_settings_required
 def get_log_paths():
     """Get all log file paths for display in Settings"""
-    home_log_dir = Path.home() / '.audio-recorder'
-    var_log_dir = Path('/var/log/audio-recorder')
-
-    return jsonify({
-        'app': str(var_log_dir / 'app.log'),
-        'error': str(var_log_dir / 'error.log'),
-        'recorder': str(home_log_dir / 'recorder.log'),
-        'scheduler': str(home_log_dir / 'scheduler.log'),
-        'ffmpeg': str(home_log_dir / 'ffmpeg.log')
-    })
+    return jsonify({name: str(path) for name, path in config.LOG_PATHS.items()})
 
 
 @app.route('/api/logs', methods=['GET'])
@@ -1636,7 +1618,7 @@ def import_data(import_type):
     
     try:
         # Create auto-backup first
-        backup_dir = Path.home() / '.audio-recorder' / 'backups'
+        backup_dir = config.BACKUP_DIR
         backup_dir.mkdir(parents=True, exist_ok=True)
         backup_filename = f'{import_type}{expected_ext}.last'
         backup_path = backup_dir / backup_filename
@@ -1731,7 +1713,7 @@ def revert_data(revert_type):
         return jsonify({'error': 'Invalid revert type. Use "schedules" or "config"'}), 400
     
     extension = '.sched' if revert_type == 'schedules' else '.conf'
-    backup_path = Path.home() / '.audio-recorder' / 'backups' / f'{revert_type}{extension}.last'
+    backup_path = config.BACKUP_DIR / f'{revert_type}{extension}.last'
     
     if not backup_path.exists():
         return jsonify({'error': 'No backup available'}), 404
@@ -1786,7 +1768,7 @@ def revert_data(revert_type):
 @full_settings_required
 def check_revert_available():
     """Check if revert backups exist for schedules and/or config"""
-    backup_dir = Path.home() / '.audio-recorder' / 'backups'
+    backup_dir = config.BACKUP_DIR
 
     return jsonify({
         'schedules_available': (backup_dir / 'schedules.sched.last').exists(),

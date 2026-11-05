@@ -2,6 +2,17 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.11.0] - 2026-11-04
+
+### Changed
+- **Centralized filesystem paths** - New `config.py` defines the state directory, log directory, backup directory, database paths, secret key path and log file paths. `app.py`, `auth.py`, `recorder.py` and `scheduler.py` no longer hard-code `~/.audio-recorder` or `/var/log/audio-recorder`. Default locations are unchanged.
+
+### Added
+- **Path overrides via environment** - `AUDIO_RECORDER_STATE_DIR`, `AUDIO_RECORDER_LOG_DIR` and `AUDIO_RECORDER_SERVICE_LOG_DIR` relocate state and logs without code changes (groundwork for running as a dedicated service account).
+- Tests for default paths, overrides, and a guard against reintroducing hard-coded paths.
+
+---
+
 ## [1.10.2] - 2026-11-04
 
 ### Fixed

@@ -19,11 +19,12 @@ import recorder
 import atexit
 import db_utils
 import validation
+import config
 
 # Log file path
-LOG_DIR = Path.home() / '.audio-recorder'
-LOG_DIR.mkdir(exist_ok=True)
-SCHEDULER_LOG_PATH = LOG_DIR / 'scheduler.log'
+config.ensure_dirs()
+LOG_DIR = config.LOG_DIR
+SCHEDULER_LOG_PATH = config.SCHEDULER_LOG_PATH
 
 # Configure logging for scheduler troubleshooting
 # Use local time for timestamps (not UTC)
@@ -75,8 +76,7 @@ def _log_scheduler_environment():
     logger.info("-" * 40)
 
 # Database setup
-DB_PATH = Path.home() / '.audio-recorder' / 'schedule.db'
-DB_PATH.parent.mkdir(exist_ok=True)
+DB_PATH = config.SCHEDULE_DB_PATH
 
 # Initialize scheduler
 scheduler = BackgroundScheduler()
