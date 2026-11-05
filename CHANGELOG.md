@@ -2,6 +2,20 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.10.2] - 2026-11-04
+
+### Fixed
+- **Section marking during scheduled recordings (1.10.1 fix was ineffective under systemd)** - The scheduler updated `recording_status` via `from app import recording_status`. Because the service runs `python3 app.py`, the routes live in `__main__`, so that import loaded a second copy of `app.py` and updated its dict instead. `recording_status` now lives in `recorder.py`, which both the routes and the scheduler share.
+- **Recurring recording history never saved** - `create_or_update_instance()` called the nonexistent `db_utils.execute()` (since 1.7.0), so no completed, failed or missed instance was recorded for recurring schedules. It now calls `db_utils.execute_query()`.
+- **Recurring job completion and occurrence lookup crashed** - `datetime.timedelta` was used where `datetime` is the class (since 1.5.4), raising `AttributeError` when a recurring recording finished and when a past occurrence was opened on the calendar.
+- **Occurrence lookup error handler** - Used an undefined `logger`; it now uses `app.logger`.
+- **Directory browser in Settings always failed** - `/api/directories/list` and `/api/directories/create` called an unimported `validate_path` and an unimported `session`; they now use `validation.validate_path` and `current_user.username`.
+
+### Added
+- **Test suite** - `tests/` with pytest smoke tests (every non-public route requires login, main pages render) and regression tests for the fixes above. Run with `pip install -r requirements-dev.txt && pytest`.
+
+---
+
 ## [1.10.1] - 2026-03-29
 
 ### Fixed

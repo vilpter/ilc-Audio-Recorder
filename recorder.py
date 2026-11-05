@@ -134,6 +134,14 @@ DISK_SPACE_MULTIPLIER = 2  # Require 2x estimated size
 current_process = None
 process_lock = threading.Lock()
 
+# Shared audio recording status. Lives here (not in app.py) so the Flask routes
+# and the scheduler thread mutate the same dict regardless of how app.py is run.
+recording_status = {
+    'is_recording': False,
+    'current_job': None,
+    'start_time': None
+}
+
 
 def load_channel_suffixes():
     """Load channel suffix configuration from database"""

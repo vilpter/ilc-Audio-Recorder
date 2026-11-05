@@ -338,11 +338,12 @@ def create_or_update_instance(job_id, occurrence_date, status, started_at=None, 
 
     instance_id = f"{job_id}_{occurrence_date}"
 
-    db_utils.execute(DB_PATH, '''
+    db_utils.execute_query(DB_PATH, '''
         INSERT OR REPLACE INTO recording_instances
         (id, parent_job_id, occurrence_date, status, started_at, completed_at, notes)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (instance_id, job_id, occurrence_date, status, started_at, completed_at, notes))
+    ''', (instance_id, job_id, occurrence_date, status, started_at, completed_at, notes),
+        commit=True)
 
     return instance_id
 
@@ -414,7 +415,7 @@ def ensure_instance_exists(job_id, occurrence_date):
 
     # Check if this occurrence is in the past
     now = datetime.now()
-    occurrence_end = occurrence_datetime + datetime.timedelta(seconds=duration)
+    occurrence_end = occurrence_datetime + timedelta(seconds=duration)
 
     if occurrence_end > now:
         # Future occurrence - don't create instance yet
@@ -901,10 +902,9 @@ def _execute_scheduled_recording(job_id, duration, allow_override=False, capture
 
         # Sync recording_status so section marking (/api/recording/section) works.
         # Manual recordings set these in the Flask route; scheduled recordings bypass it.
-        from app import recording_status
-        recording_status['is_recording'] = True
-        recording_status['current_job'] = job_id
-        recording_status['start_time'] = datetime.now().isoformat()
+        recorder.recording_status['is_recording'] = True
+        recorder.recording_status['current_job'] = job_id
+        recorder.recording_status['start_time'] = datetime.now().isoformat()
 
         # Start video recording if requested
         if capture_video:
@@ -951,7 +951,7 @@ def _execute_scheduled_recording(job_id, duration, allow_override=False, capture
                 occurrence_date=occurrence_date,
                 status='completed',
                 started_at=now.isoformat(),
-                completed_at=(now + datetime.timedelta(seconds=duration)).isoformat(),
+                completed_at=(now + timedelta(seconds=duration)).isoformat(),
                 notes=execution_note
             )
             logger.info(f"Job {job_id} executed successfully - instance created for {occurrence_date} (recurring job)")

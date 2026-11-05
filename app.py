@@ -22,7 +22,7 @@ import auth
 import db_utils
 import validation
 
-__version__ = '1.10.1'
+__version__ = '1.10.2'
 
 app = Flask(__name__)
 
@@ -114,12 +114,8 @@ def get_recordings_dir():
     return recordings_dir
 
 
-# Global status tracker for audio
-recording_status = {
-    'is_recording': False,
-    'current_job': None,
-    'start_time': None
-}
+# Global status tracker for audio (shared with the scheduler via recorder module)
+recording_status = recorder.recording_status
 
 # Global status tracker for video
 video_recording_status = {
@@ -825,7 +821,7 @@ def get_occurrence_instance(job_id, occurrence_date):
         }), 200
 
     except Exception as e:
-        logger.error(f"Error fetching/creating instance for {job_id} on {occurrence_date}: {e}")
+        app.logger.error(f"Error fetching/creating instance for {job_id} on {occurrence_date}: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1209,7 +1205,7 @@ def list_directories():
     requested_path = data.get('path', '/')
 
     # Validate path using existing validation
-    valid, error, validated_path = validate_path(requested_path, "Path", allow_relative=False)
+    valid, error, validated_path = validation.validate_path(requested_path, "Path", allow_relative=False)
     if not valid:
         return jsonify({'success': False, 'error': error}), 400
 
@@ -1284,7 +1280,7 @@ def create_directory():
         return jsonify({'success': False, 'error': 'parent_path and folder_name are required'}), 400
 
     # Validate parent path
-    valid, error, validated_parent = validate_path(parent_path, "Parent path", allow_relative=False)
+    valid, error, validated_parent = validation.validate_path(parent_path, "Parent path", allow_relative=False)
     if not valid:
         return jsonify({'success': False, 'error': error}), 400
 
@@ -1329,7 +1325,7 @@ def create_directory():
         new_dir_path.mkdir(mode=0o755, parents=False)
 
         # Log the creation
-        username = session.get('username', 'unknown')
+        username = current_user.username
         app.logger.info(f"Directory created by {username}: {str(new_dir_path)}")
 
         return jsonify({
