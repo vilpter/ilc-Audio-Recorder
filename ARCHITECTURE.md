@@ -317,6 +317,7 @@ church-recording/
 ├── scheduler.py              # Job scheduling (APScheduler)
 ├── auth.py                   # User authentication
 ├── config.py                 # State, log and backup paths (env-overridable)
+├── logging_setup.py          # Log files, levels and rotation
 ├── pyproject.toml            # Project metadata, top-level dependencies, pytest config
 ├── requirements.lock         # Pinned, hashed runtime dependencies (generated)
 ├── requirements-dev.lock     # Same plus test dependencies (generated)
@@ -356,12 +357,15 @@ Installed by `install.sh` (1.12.0+):
 | Auth database | `/var/lib/audio-recorder/auth.db` | SQLite |
 | Session secret key | `/var/lib/audio-recorder/secret_key` | Mode 600 |
 | Import backups | `/var/lib/audio-recorder/backups/` | See Backup Files |
-| Application logs | `/var/log/audio-recorder/app.log` | Service stdout |
-| Error logs | `/var/log/audio-recorder/error.log` | Service stderr |
-| Recorder logs | `/var/log/audio-recorder/recorder.log` | Audio capture operations |
-| Scheduler logs | `/var/log/audio-recorder/scheduler.log` | Scheduled job execution |
-| FFmpeg logs | `/var/log/audio-recorder/ffmpeg.log` | FFmpeg stderr output |
+| Application log | `/var/log/audio-recorder/app.log` | Web app and everything not in the logs below (INFO+) |
+| Error log | `/var/log/audio-recorder/error.log` | Warnings and errors from all components |
+| Startup/crash output | systemd journal (`journalctl -u audio-recorder`) | Service console output |
+| Recorder log | `/var/log/audio-recorder/recorder.log` | Audio capture, analysis, database |
+| Scheduler log | `/var/log/audio-recorder/scheduler.log` | Scheduled job execution (incl. APScheduler) |
+| FFmpeg log | `/var/log/audio-recorder/ffmpeg.log` | FFmpeg output per recording (progress once a minute) |
 | Service file | `/etc/systemd/system/audio-recorder.service` | Replaced on each install; customize with `systemctl edit` |
+
+Each log file is capped at 5 MB and rotated, keeping three older copies (`app.log.1` … `app.log.3`). Logging is configured in `logging_setup.py`; web request lines are not logged. Set `AUDIO_RECORDER_LOG_LEVEL=DEBUG` in a drop-in for verbose output.
 
 The service runs as the `audio-recorder` system account (member of `audio`).
 Installs before 1.12.0 kept data and logs in `~/.audio-recorder` and ran as the
@@ -375,7 +379,8 @@ defaults below apply:
 |----------|---------|----------|
 | `AUDIO_RECORDER_STATE_DIR` | `~/.audio-recorder` | Databases, secret key, `backups/` |
 | `AUDIO_RECORDER_LOG_DIR` | state directory | recorder, scheduler and FFmpeg logs |
-| `AUDIO_RECORDER_SERVICE_LOG_DIR` | `/var/log/audio-recorder` | app/error log paths shown in Settings |
+| `AUDIO_RECORDER_SERVICE_LOG_DIR` | `/var/log/audio-recorder` | app and error logs |
+| `AUDIO_RECORDER_LOG_LEVEL` | `INFO` | Log detail (`DEBUG` for troubleshooting); error.log is always WARNING+ |
 
 ---
 

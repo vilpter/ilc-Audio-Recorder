@@ -11,6 +11,7 @@ import os
 import re
 import threading
 import json
+import logging
 from pathlib import Path
 from datetime import datetime
 from urllib.parse import quote
@@ -20,6 +21,8 @@ import requests
 # Import scheduler for config storage (reuses existing system_config table)
 import scheduler
 import validation
+
+logger = logging.getLogger('video_recorder')
 
 # Configuration constants
 DEFAULT_VIDEO_BITRATE = '4M'  # For hardware transcoding
@@ -399,7 +402,7 @@ def start_video_recording(duration_seconds=None):
         # Output file
         cmd.append(str(paths['raw_file']))
 
-        print(f"Starting video recording: {paths['raw_file']}")
+        logger.info(f"Starting video recording: {paths['raw_file']}")
 
         try:
             video_process = subprocess.Popen(
@@ -443,7 +446,7 @@ def stop_video_recording():
         if not video_process or video_process.poll() is not None:
             raise RuntimeError("No video recording in progress")
 
-        print("Stopping video recording...")
+        logger.info("Stopping video recording...")
 
         # Send 'q' to ffmpeg stdin for graceful shutdown
         # This ensures the MP4 header is written correctly
@@ -508,7 +511,7 @@ def _monitor_video_process(process, paths, duration):
 
     # Check if file was created successfully
     if paths['raw_file'].exists() and paths['raw_file'].stat().st_size > 0:
-        print(f"Video recording completed: {paths['raw_file']}")
+        logger.info(f"Video recording completed: {paths['raw_file']}")
 
         # Trigger transcoding in background
         threading.Thread(
@@ -517,7 +520,7 @@ def _monitor_video_process(process, paths, duration):
             daemon=True
         ).start()
     else:
-        print(f"Video recording failed or empty: {paths['raw_file']}")
+        logger.error(f"Video recording failed or empty: {paths['raw_file']}")
 
 
 # ============================================================================
@@ -564,7 +567,7 @@ def transcode_video(input_file, output_file, delete_raw=True):
             output_file
         ]
 
-        print(f"Starting transcode: {input_file} -> {output_file}")
+        logger.info(f"Starting transcode: {input_file} -> {output_file}")
 
         with transcode_lock:
             transcode_progress['status'] = 'transcoding'
@@ -607,9 +610,9 @@ def transcode_video(input_file, output_file, delete_raw=True):
             if delete_raw:
                 try:
                     Path(input_file).unlink()
-                    print(f"Deleted raw file: {input_file}")
+                    logger.info(f"Deleted raw file: {input_file}")
                 except Exception as e:
-                    print(f"Warning: Could not delete raw file: {e}")
+                    logger.warning(f"Warning: Could not delete raw file: {e}")
 
             with transcode_lock:
                 transcode_progress['status'] = 'completed'
@@ -677,7 +680,7 @@ def get_video_duration(file_path):
         if result.returncode == 0 and result.stdout.strip():
             return float(result.stdout.strip())
     except Exception as e:
-        print(f"Error getting video duration: {e}")
+        logger.error(f"Error getting video duration: {e}")
     return None
 
 

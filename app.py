@@ -9,21 +9,27 @@ from flask_login import login_required, login_user, logout_user, current_user
 from functools import wraps
 from pathlib import Path
 import json
+import logging
 import math
 import os
 import secrets
 import subprocess
 import sqlite3
 from datetime import datetime
+import config
+import logging_setup
+# Before importing the modules below: scheduler starts (and logs) at import
+logging_setup.configure_logging()
+logging.getLogger('app').info("Audio Recorder starting (log level %s)",
+                              logging.getLevelName(logging_setup._log_level()))
 import recorder
 import video_recorder
 import scheduler
 import auth
-import config
 import db_utils
 import validation
 
-__version__ = '1.12.2'
+__version__ = '1.12.3'
 
 app = Flask(__name__)
 
@@ -1520,13 +1526,37 @@ def get_log_paths():
     return jsonify({name: str(path) for name, path in config.LOG_PATHS.items()})
 
 
+def _tail_lines(path, count, block_size=64 * 1024):
+    """Return (last `count` lines, total line count) without loading the file into memory."""
+    total = 0
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b''):
+            total += chunk.count(b'\n')
+        end = f.tell()
+        data = b''
+        pos = end
+        while pos > 0 and data.count(b'\n') <= count:
+            step = min(block_size, pos)
+            pos -= step
+            f.seek(pos)
+            data = f.read(step) + data
+    text = data.decode('utf-8', errors='replace')
+    tail = text.splitlines(keepends=True)[-count:]
+    if text and not text.endswith('\n'):
+        total += 1  # last line has no newline yet
+    return tail, total
+
+
 @app.route('/api/logs', methods=['GET'])
 @login_required
 @full_settings_required
 def get_logs():
     """Get application logs"""
     log_type = request.args.get('type', 'app')
-    lines = int(request.args.get('lines', 100))
+    try:
+        lines = min(max(int(request.args.get('lines', 100)), 1), 5000)
+    except ValueError:
+        lines = 100
 
     log_file = _get_log_file_path(log_type)
 
@@ -1538,14 +1568,11 @@ def get_logs():
         })
 
     try:
-        # Read last N lines
-        with open(log_file, 'r') as f:
-            all_lines = f.readlines()
-            log_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+        log_lines, total_lines = _tail_lines(log_file, lines)
 
         return jsonify({
             'logs': log_lines,
-            'total_lines': len(all_lines),
+            'total_lines': total_lines,
             'showing_lines': len(log_lines),
             'log_type': log_type,
             'file_path': str(log_file)

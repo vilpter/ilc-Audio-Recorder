@@ -18,6 +18,7 @@ import time
 import scheduler
 import db_utils
 import config
+import logging_setup
 
 # Log file paths (exported for Settings page)
 config.ensure_dirs()
@@ -25,24 +26,7 @@ LOG_DIR = config.LOG_DIR
 RECORDER_LOG_PATH = config.RECORDER_LOG_PATH
 FFMPEG_LOG_PATH = config.FFMPEG_LOG_PATH
 
-# Configure logging for device detection troubleshooting
-# Use local time for timestamps (not UTC)
-class LocalTimeFormatter(logging.Formatter):
-    converter = time.localtime  # Use local time instead of UTC
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[
-        logging.StreamHandler(sys.stderr),
-        logging.FileHandler(RECORDER_LOG_PATH)
-    ]
-)
-# Apply local time formatter to all handlers
-for handler in logging.root.handlers:
-    handler.setFormatter(LocalTimeFormatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-                                            datefmt='%Y-%m-%d %H:%M:%S'))
+# Handlers are installed by logging_setup.configure_logging() (called from app.py)
 logger = logging.getLogger('recorder')
 
 
@@ -100,9 +84,23 @@ def _log_system_state():
     logger.info("=" * 40)
 
 
+FFMPEG_LOG_MAX_BYTES = logging_setup.MAX_BYTES
+FFMPEG_PROGRESS_INTERVAL = 60  # seconds between logged progress lines
+
+
+def _is_ffmpeg_progress(line):
+    return line.lstrip().startswith('size=') and 'time=' in line
+
+
 def _log_ffmpeg_output(process, paths, job_timestamp):
-    """Log FFmpeg stderr to dedicated log file"""
+    """Log FFmpeg stderr to dedicated log file.
+
+    FFmpeg prints a progress line twice a second; only one per
+    FFMPEG_PROGRESS_INTERVAL is kept, plus the last one before any other
+    message (such as an error or the exit summary).
+    """
     ffmpeg_log_file = FFMPEG_LOG_PATH
+    logging_setup.rotate_if_oversized(ffmpeg_log_file, FFMPEG_LOG_MAX_BYTES)
 
     try:
         with open(ffmpeg_log_file, 'a') as f:
@@ -113,13 +111,32 @@ def _log_ffmpeg_output(process, paths, job_timestamp):
             f.write(f"{'='*60}\n")
 
             # Read stderr in real-time
+            last_progress_logged = 0.0
+            pending_progress = None
             for line in process.stderr:
                 timestamp = datetime.now().strftime('%H:%M:%S')
+                if _is_ffmpeg_progress(line):
+                    now = time.monotonic()
+                    if now - last_progress_logged < FFMPEG_PROGRESS_INTERVAL:
+                        pending_progress = f"[{timestamp}] {line}"
+                        continue
+                    last_progress_logged = now
+                elif pending_progress:
+                    # Progress just before a message (exit, error) gives it context
+                    f.write(pending_progress)
+                pending_progress = None
                 f.write(f"[{timestamp}] {line}")
                 f.flush()
+            if pending_progress:
+                f.write(pending_progress)
 
+            # stderr closes as FFmpeg exits; collect its exit status for the log
+            try:
+                returncode = process.wait(timeout=10)
+            except Exception:
+                returncode = process.returncode
             f.write(f"\nProcess ended: {datetime.now().isoformat()}\n")
-            f.write(f"Return code: {process.returncode}\n")
+            f.write(f"Return code: {returncode}\n")
     except Exception as e:
         logger.error(f"Error writing FFmpeg log: {e}")
 
@@ -134,6 +151,11 @@ DISK_SPACE_MULTIPLIER = 2  # Require 2x estimated size
 # Global process tracker
 current_process = None
 process_lock = threading.Lock()
+_stop_requested = False  # set by stop_capture() so the monitor knows the stop was intended
+
+# Recordings (by base name) being analyzed, so one recording is never analyzed twice at once
+_analysis_in_progress = set()
+_analysis_lock = threading.Lock()
 
 # Shared audio recording status. Lives here (not in app.py) so the Flask routes
 # and the scheduler thread mutate the same dict regardless of how app.py is run.
@@ -274,7 +296,7 @@ def start_capture(duration_seconds=3600, device=None, allow_override=False):
     Raises:
         RuntimeError: If recording already in progress or validation fails
     """
-    global current_process
+    global current_process, _stop_requested
     
     # Load device from config if not specified
     if device is None:
@@ -284,7 +306,7 @@ def start_capture(duration_seconds=3600, device=None, allow_override=False):
         logger.info(f"Device config from database: '{device_config}'")
         if device_config == 'auto':
             logger.info("Auto-detecting audio device...")
-            device = auto_detect_audio_device()
+            device = auto_detect_audio_device(verbose=True)
         else:
             device = device_config
             logger.info(f"Using configured device: {device}")
@@ -308,7 +330,6 @@ def start_capture(duration_seconds=3600, device=None, allow_override=False):
             raise RuntimeError(msg)
         
         logger.info(f"Starting recording: {duration_seconds}s on {device}, ~{req_gb/2:.2f} GB estimated per channel")
-        print(f"Starting recording: {duration_seconds}s on {device}, ~{req_gb/2:.2f} GB estimated per channel")
 
         # Log system state for troubleshooting
         _log_system_state()
@@ -335,6 +356,7 @@ def start_capture(duration_seconds=3600, device=None, allow_override=False):
         logger.info(f"FFmpeg command: {cmd_str}")
 
         # Start FFmpeg process
+        _stop_requested = False
         current_process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -370,13 +392,14 @@ def stop_capture():
     """
     Gracefully stop current recording
     """
-    global current_process
-    
+    global current_process, _stop_requested
+
     with process_lock:
         if not current_process or current_process.poll() is not None:
             raise RuntimeError("No recording in progress")
-        
+
         # Send SIGTERM for graceful shutdown
+        _stop_requested = True
         current_process.terminate()
         
         # Wait up to 5 seconds for graceful exit
@@ -388,12 +411,8 @@ def stop_capture():
             current_process.wait()
 
         current_process = None
-
-    # Check for unanalyzed files in background
-    threading.Thread(
-        target=analyze_unanalyzed_recordings,
-        daemon=True
-    ).start()
+    # The monitor thread sees the process exit and schedules analysis of this
+    # recording (and of any older recordings still missing analysis).
 
 
 def _monitor_process(process, paths, duration):
@@ -430,7 +449,12 @@ def _monitor_process(process, paths, duration):
 
     # Process completed
     elapsed_total = time.time() - start_time
-    logger.info(f"FFmpeg process ended for {job_timestamp} after {elapsed_total:.1f}s (expected {duration}s)")
+    stopped_by_user = _stop_requested
+    if stopped_by_user:
+        logger.info(f"Recording {job_timestamp} stopped by user after {elapsed_total:.1f}s "
+                    f"(scheduled for {duration}s)")
+    else:
+        logger.info(f"FFmpeg process ended for {job_timestamp} after {elapsed_total:.1f}s (expected {duration}s)")
     logger.info(f"FFmpeg return code: {process.returncode}")
 
     # Check if files were created successfully
@@ -444,11 +468,18 @@ def _monitor_process(process, paths, duration):
         logger.info(f"  Left channel: {paths['source_a']} ({size_a_mb:.1f} MB)")
         logger.info(f"  Right channel: {paths['source_b']} ({size_b_mb:.1f} MB)")
 
-        # Warn if files are suspiciously small (might be silent)
-        expected_size_mb = (duration * SAMPLE_RATE * BYTES_PER_SAMPLE) / (1024 * 1024)
-        if size_a_mb < expected_size_mb * 0.5 or size_b_mb < expected_size_mb * 0.5:
-            logger.warning(f"WARNING: File sizes are smaller than expected ({expected_size_mb:.1f} MB). "
-                          f"Recording may be truncated or silent!")
+        # Warn if files are much smaller than the time actually recorded implies
+        # (a stopped-early recording is expected to be shorter than scheduled)
+        recorded_seconds = min(duration, elapsed_total)
+        expected_size_mb = (recorded_seconds * SAMPLE_RATE * BYTES_PER_SAMPLE) / (1024 * 1024)
+        # (skipped for very short recordings, where FFmpeg's startup time dominates)
+        if recorded_seconds >= 10 and (size_a_mb < expected_size_mb * 0.5 or size_b_mb < expected_size_mb * 0.5):
+            logger.warning(f"WARNING: File sizes are smaller than expected for {recorded_seconds:.0f}s "
+                          f"of audio ({expected_size_mb:.1f} MB). Recording may be truncated!")
+        if not stopped_by_user and elapsed_total < duration * 0.95:
+            logger.warning(f"WARNING: Recording {job_timestamp} ended after {elapsed_total:.0f}s "
+                           f"of {duration}s without being stopped (FFmpeg return code "
+                           f"{process.returncode})")
 
         # Schedule analysis after 20-second delay
         threading.Timer(
@@ -457,12 +488,17 @@ def _monitor_process(process, paths, duration):
             args=(paths['source_a'], paths['source_b'], job_timestamp)
         ).start()
 
-        print(f"Recording completed: {paths['timestamp']}")
+        # Catch up on older recordings that never got analyzed
+        threading.Thread(
+            target=analyze_unanalyzed_recordings,
+            kwargs={'exclude': {paths['source_a'].name, paths['source_b'].name}},
+            daemon=True
+        ).start()
+
     else:
         logger.error(f"Recording FAILED: {job_timestamp} - output files not created")
         logger.error(f"  Expected: {paths['source_a']}")
         logger.error(f"  Expected: {paths['source_b']}")
-        print(f"Recording failed: {paths['timestamp']}")
 
 
 def _analyze_recording_delayed(source_a, source_b, job_timestamp):
@@ -475,6 +511,20 @@ def _analyze_recording_delayed(source_a, source_b, job_timestamp):
         source_b: Path to right channel WAV file
         job_timestamp: Recording timestamp identifier
     """
+    with _analysis_lock:
+        if job_timestamp in _analysis_in_progress:
+            logger.info(f"Analysis already running for {job_timestamp}; skipping duplicate")
+            return
+        _analysis_in_progress.add(job_timestamp)
+    try:
+        _analyze_recording(source_a, source_b, job_timestamp)
+    finally:
+        with _analysis_lock:
+            _analysis_in_progress.discard(job_timestamp)
+
+
+def _analyze_recording(source_a, source_b, job_timestamp):
+    """Analyze both channels of one recording and store the results."""
     import audio_analyzer
     import db_utils
     from datetime import datetime
@@ -573,10 +623,11 @@ def _analyze_recording_delayed(source_a, source_b, job_timestamp):
     logger.info(f"Analysis batch complete for: {job_timestamp}")
 
 
-def analyze_unanalyzed_recordings():
+def analyze_unanalyzed_recordings(exclude=()):
     """
     Check for WAV files without analysis and analyze them.
-    Called on app startup and when recordings stop.
+    Called on app startup and after each recording (with that recording's
+    files in exclude, since they are analyzed separately).
     """
     from pathlib import Path
     from scheduler import get_system_config, DB_PATH
@@ -599,7 +650,7 @@ def analyze_unanalyzed_recordings():
 
     # Find unanalyzed WAV files
     wav_files = list(recordings_dir.glob('*.wav'))
-    unanalyzed = [f for f in wav_files if f.name not in analyzed_files]
+    unanalyzed = [f for f in wav_files if f.name not in analyzed_files and f.name not in exclude]
 
     if unanalyzed:
         logger.info(f"Found {len(unanalyzed)} unanalyzed recordings")
@@ -705,7 +756,7 @@ def get_available_audio_devices():
     return devices
 
 
-def auto_detect_audio_device():
+def auto_detect_audio_device(verbose=False):
     """
     Automatically select the best audio device
 
@@ -713,15 +764,19 @@ def auto_detect_audio_device():
     1. First USB audio device (UCA202)
     2. First capture-capable device
     3. hw:1,0 as fallback
+
+    verbose=True logs the selection at INFO (used when starting a recording);
+    otherwise it is DEBUG, since the Settings page asks several times per load.
     """
-    logger.info(f"auto_detect_audio_device() called from thread: {threading.current_thread().name}")
+    log = logger.info if verbose else logger.debug
+    log(f"auto_detect_audio_device() called from thread: {threading.current_thread().name}")
     devices = get_available_audio_devices()
-    logger.info(f"Found {len(devices)} audio device(s): {[d['alsa_id'] for d in devices]}")
+    log(f"Found {len(devices)} audio device(s): {[d['alsa_id'] for d in devices]}")
 
     # Try to find recommended device (UCA202)
     for dev in devices:
         if dev.get('is_recommended'):
-            logger.info(f"Selected recommended device: {dev['alsa_id']} ({dev['name']})")
+            log(f"Selected recommended device: {dev['alsa_id']} ({dev['name']})")
             return dev['alsa_id']
 
     # Fallback to first capture device

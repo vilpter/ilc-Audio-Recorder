@@ -2,6 +2,27 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.12.3] - 2026-11-04
+
+### Fixed
+- **Logs went to the wrong files** - `recorder.py` and `scheduler.py` each called `logging.basicConfig()`, and only the first call takes effect, so every message (including DEBUG output and a line per web request) went to `scheduler.log` and to the console, which systemd appended to `error.log`. `recorder.log` stopped being written. Logging is now configured once, in the new `logging_setup.py`:
+  - `recorder.log` - recording, device selection, analysis, database
+  - `scheduler.log` - scheduled jobs (including APScheduler)
+  - `app.log` - web app, logins, video
+  - `error.log` - warnings and errors from everything (no longer routine output)
+- **Logs grew without limit** - Each log is capped at 5 MB with three older copies. Oversized files from earlier versions are rotated at startup. `ffmpeg.log` keeps one progress line per minute instead of two per second (about 0.6 MB less per hour of recording) and rotates the same way.
+- **Misleading warning when stopping a recording early** - "File sizes are smaller than expected" compared the files with the scheduled duration. It now compares with the time actually recorded, and a recording that ends early without being stopped gets its own warning.
+- **Recordings stopped from the web interface were analyzed twice** - Stopping started a scan for unanalyzed files that picked up the recording while the normal post-recording analysis was also scheduled. The scan now skips the recording just made, and a recording is never analyzed twice at the same time.
+- **`ffmpeg.log` always showed `Return code: None`** - The exit status is now collected before it is logged.
+- **Settings log viewer read whole log files** - Every refresh (every 5 seconds) loaded the entire file into memory, including a 46 MB `ffmpeg.log`. It now reads only the end of the file.
+
+### Changed
+- Web request lines are no longer logged (the pages poll the server every few seconds).
+- Audio device detection logs its details only when a recording starts, not on each Settings page request.
+- The service's console output goes to the systemd journal (`journalctl -u audio-recorder`); the app writes its log files itself.
+- `AUDIO_RECORDER_LOG_LEVEL=DEBUG` (in a `systemctl edit` drop-in) enables verbose logs.
+- Video recorder and scheduler startup messages use the logs instead of `print()`.
+
 ## [1.12.2] - 2026-11-04
 
 ### Added

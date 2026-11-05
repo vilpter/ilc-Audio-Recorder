@@ -34,9 +34,13 @@ LogsDirectoryMode=0750
 Restart=always
 RestartSec=10
 
-# Logging
-StandardOutput=append:/var/log/audio-recorder/app.log
-StandardError=append:/var/log/audio-recorder/error.log
+# Logging: the app writes its own size-limited logs (app, error, recorder,
+# scheduler, ffmpeg) to /var/log/audio-recorder. Anything printed to the console,
+# such as a crash during startup, goes to the journal:
+#   journalctl -u audio-recorder
+# For verbose logs:  sudo systemctl edit audio-recorder  and add
+#   [Service]
+#   Environment=AUDIO_RECORDER_LOG_LEVEL=DEBUG
 
 # Hardening. ProtectSystem=full makes /usr, /boot and /etc read-only. It is not
 # "strict", and ProtectHome is not set, because the recordings directory is a

@@ -595,7 +595,8 @@ else
     warn "Web interface did not respond on port $PORT"
     sudo systemctl status "$SERVICE_NAME" --no-pager -l | head -20 || true
     echo ""
-    echo "  Logs: sudo tail -50 $LOG_DIR/error.log"
+    echo "  Startup output:  sudo journalctl -u $SERVICE_NAME -n 50 --no-pager"
+    echo "  Errors:          sudo tail -50 $LOG_DIR/error.log"
     echo "  To roll back the code: sudo mv $APP_DIR $APP_DIR.failed && sudo mv $PREFIX/app.prev $APP_DIR && sudo systemctl restart $SERVICE_NAME"
 fi
 

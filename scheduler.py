@@ -26,26 +26,7 @@ config.ensure_dirs()
 LOG_DIR = config.LOG_DIR
 SCHEDULER_LOG_PATH = config.SCHEDULER_LOG_PATH
 
-# Configure logging for scheduler troubleshooting
-# Use local time for timestamps (not UTC)
-import time as time_module
-
-class LocalTimeFormatter(logging.Formatter):
-    converter = time_module.localtime  # Use local time instead of UTC
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[
-        logging.StreamHandler(sys.stderr),
-        logging.FileHandler(SCHEDULER_LOG_PATH)
-    ]
-)
-# Apply local time formatter to all handlers
-for handler in logging.root.handlers:
-    handler.setFormatter(LocalTimeFormatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-                                            datefmt='%Y-%m-%d %H:%M:%S'))
+# Handlers are installed by logging_setup.configure_logging() (called from app.py)
 logger = logging.getLogger('scheduler')
 
 
@@ -1016,7 +997,7 @@ def restore_jobs_on_startup():
                 args=[job['id'], job['duration'], allow_override, capture_video],
                 replace_existing=True
             )
-            print(f"Restored recurring job: {job['id']} - {pattern['type']}")
+            logger.info(f"Restored recurring job: {job['id']} - {pattern['type']}")
 
         # Handle one-time jobs
         elif start_time > datetime.now():
@@ -1027,7 +1008,7 @@ def restore_jobs_on_startup():
                 args=[job['id'], job['duration'], allow_override, capture_video],
                 replace_existing=True
             )
-            print(f"Restored scheduled job: {job['id']} at {start_time}")
+            logger.info(f"Restored scheduled job: {job['id']} at {start_time}")
         else:
             # Mark one-time jobs as missed if past due
             db_utils.execute_query(DB_PATH, '''
@@ -1035,7 +1016,7 @@ def restore_jobs_on_startup():
                 SET status = 'missed'
                 WHERE id = ?
             ''', (job['id'],), commit=True)
-            print(f"Marked job as missed: {job['id']}")
+            logger.warning(f"Marked job as missed: {job['id']}")
 
 
 def get_system_config(key, default=None):

@@ -228,6 +228,7 @@ audio-recorder/
 ├── scheduler.py              # Job scheduling (APScheduler)
 ├── auth.py                   # Authentication module
 ├── config.py                 # State, log and backup paths
+├── logging_setup.py          # Log files, levels and rotation
 ├── pyproject.toml            # Project metadata and top-level dependencies
 ├── requirements.lock         # Pinned, hashed runtime dependencies
 ├── requirements-dev.lock     # Same, plus test dependencies
@@ -333,12 +334,34 @@ Import features:
 
 ## Troubleshooting
 
+### Log Files
+
+All logs are in `/var/log/audio-recorder/` and can be viewed in Settings → Logs:
+
+| File | Contains |
+|------|----------|
+| `error.log` | Warnings and errors from every part of the app — check this first |
+| `recorder.log` | Recording start/stop, device selection, analysis |
+| `scheduler.log` | Scheduled jobs |
+| `app.log` | Web app, logins, video |
+| `ffmpeg.log` | FFmpeg output for each recording |
+
+Each file is capped at 5 MB, with three older copies kept (`.1`–`.3`). For more
+detail while troubleshooting, run `sudo systemctl edit audio-recorder`, add
+
+```ini
+[Service]
+Environment=AUDIO_RECORDER_LOG_LEVEL=DEBUG
+```
+
+then `sudo systemctl restart audio-recorder`. Remove it again afterwards.
+
 ### Service Won't Start
 
 ```bash
 sudo systemctl status audio-recorder
-sudo journalctl -u audio-recorder -n 50
-sudo tail -50 /var/log/audio-recorder/error.log
+sudo journalctl -u audio-recorder -n 50       # startup output and crashes
+sudo tail -50 /var/log/audio-recorder/error.log   # warnings and errors
 
 # Re-running the installer repairs the service, account and permissions
 cd ~/audio-recorder && ./install.sh --upgrade
@@ -510,5 +533,5 @@ After completing development work, ensure the following are updated:
 
 ---
 
-**Version:** 1.12.2
+**Version:** 1.12.3
 **Last Updated:** 2026-11-04
