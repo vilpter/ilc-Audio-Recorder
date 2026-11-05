@@ -1,5 +1,6 @@
 """Path configuration (config.py)."""
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -123,3 +124,13 @@ def test_service_unit_matches_config_env():
                 'AUDIO_RECORDER_LOG_DIR=/var/log/audio-recorder',
                 'AUDIO_RECORDER_SERVICE_LOG_DIR=/var/log/audio-recorder'):
         assert f'Environment={var}' in unit
+
+
+def test_installer_checks_service_paths_as_root():
+    """The installing user cannot read the state, log or storage directories, so
+    shell tests on them must use `sudo test`; a plain `[ -e ... ]` reports
+    "missing" and once caused every upgrade to re-migrate old data over live data."""
+    text = (ROOT / 'install.sh').read_text()
+    unprivileged = re.findall(r'\[\[? +!? *-[a-z] +"\$(?:STATE_DIR|LOG_DIR|STORAGE)\b[^\]]*\]', text)
+    globs = re.findall(r'"\$(?:STATE_DIR|LOG_DIR|STORAGE)"/\*', text)
+    assert not unprivileged and not globs, unprivileged + globs

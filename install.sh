@@ -309,13 +309,12 @@ section "Data and logs"
 
 sudo install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$STATE_DIR" "$LOG_DIR"
 
-if [ -d "$LEGACY_STATE_DIR" ] && [ ! -e "$STATE_DIR/auth.db" ] && [ ! -e "$STATE_DIR/schedule.db" ]; then
+# Tests on the state, log and storage directories run as root: they are not
+# readable by the installing user, and a failed test would look like "missing".
+if [ -d "$LEGACY_STATE_DIR" ] && ! sudo test -e "$STATE_DIR/auth.db" && ! sudo test -e "$STATE_DIR/schedule.db"; then
     info "Migrating data from $LEGACY_STATE_DIR"
     sudo cp -a "$LEGACY_STATE_DIR/." "$STATE_DIR/"
-    for log in "$STATE_DIR"/*.log; do
-        [ -e "$log" ] || continue
-        sudo mv -f "$log" "$LOG_DIR/"
-    done
+    sudo find "$STATE_DIR" -maxdepth 1 -type f -name '*.log' -exec mv -f -t "$LOG_DIR" {} +
     MIGRATED=true
     ok "Copied users, schedules, settings and backups to $STATE_DIR"
     info "The original $LEGACY_STATE_DIR was left in place; delete it once everything checks out"
@@ -324,7 +323,7 @@ elif [ -d "$LEGACY_STATE_DIR" ]; then
 fi
 
 sudo chown -R "$SERVICE_USER:$SERVICE_USER" "$STATE_DIR" "$LOG_DIR"
-[ -e "$STATE_DIR/secret_key" ] && sudo chmod 600 "$STATE_DIR/secret_key"
+if sudo test -e "$STATE_DIR/secret_key"; then sudo chmod 600 "$STATE_DIR/secret_key"; fi
 ok "$STATE_DIR"
 ok "$LOG_DIR"
 
@@ -359,7 +358,7 @@ first_blocking_parent() {
 
 storage_writable() { as_service test -d "$1" -a -w "$1" -a -x "$1" 2>/dev/null; }
 
-if [ ! -e "$STORAGE" ]; then
+if ! sudo test -e "$STORAGE"; then
     sudo install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 2775 "$STORAGE"
     ok "Created $STORAGE"
     if ! mountpoint -q "$STORAGE" && [[ "$STORAGE" == /mnt/* || "$STORAGE" == /media/* ]]; then

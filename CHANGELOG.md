@@ -2,6 +2,12 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.12.1] - 2026-11-04
+
+### Fixed
+- **Upgrade re-migrated old data on every run** - `install.sh` checked for existing data in `/var/lib/audio-recorder` as the installing user, who cannot read that directory (until a new login picks up the `audio-recorder` group, and only then because of it). The check always failed, so every re-run copied `~/.audio-recorder` over the live databases again, reverting settings changed since the first upgrade (such as the storage location) along with any users, schedules or analysis added in between. These checks now run with `sudo`.
+- **Recordings directory treated as missing** - For the same reason, a storage directory the installing user cannot see was treated as missing and re-created with `install -d`, which resets the owner and mode of an existing directory. Legacy log files were also not moved to `/var/log/audio-recorder`, and the `secret_key` permission fix was skipped.
+
 ## [1.12.0] - 2026-11-04
 
 ### Changed
