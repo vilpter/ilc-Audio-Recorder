@@ -1,16 +1,34 @@
 [Unit]
 Description=Audio Recorder - Dual-Mono Recording System
-After=network.target sound.target
-Wants=network.target
+After=network-online.target sound.target
+Wants=network-online.target
+
+# Installed by install.sh to /etc/systemd/system/audio-recorder.service and
+# overwritten on every install/upgrade. Put local customizations in a drop-in:
+#   sudo systemctl edit audio-recorder
 
 [Service]
 Type=simple
-# IMPORTANT: Replace 'pi' with your actual username if different
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/audio-recorder
-Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-ExecStart=/usr/bin/python3 /home/pi/audio-recorder/app.py
+User=audio-recorder
+Group=audio-recorder
+# ALSA capture devices (/dev/snd/*)
+SupplementaryGroups=audio
+
+WorkingDirectory=/opt/audio-recorder/app
+ExecStart=/opt/audio-recorder/.venv/bin/python /opt/audio-recorder/app/app.py
+
+# Runtime locations (see config.py)
+Environment=AUDIO_RECORDER_STATE_DIR=/var/lib/audio-recorder
+Environment=AUDIO_RECORDER_LOG_DIR=/var/log/audio-recorder
+Environment=AUDIO_RECORDER_SERVICE_LOG_DIR=/var/log/audio-recorder
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+# systemd creates these and keeps them owned by the service account
+StateDirectory=audio-recorder
+StateDirectoryMode=0750
+LogsDirectory=audio-recorder
+LogsDirectoryMode=0750
 
 # Restart policy
 Restart=always
@@ -20,9 +38,19 @@ RestartSec=10
 StandardOutput=append:/var/log/audio-recorder/app.log
 StandardError=append:/var/log/audio-recorder/error.log
 
-# Security settings (optional but recommended)
+# Hardening. ProtectSystem=full makes /usr, /boot and /etc read-only. It is not
+# "strict", and ProtectHome is not set, because the recordings directory is a
+# user setting and may live anywhere the service account can write.
+#
+# Seccomp-based options (RestrictSUIDSGID, LockPersonality, ProtectKernelTunables,
+# ProtectKernelModules) are deliberately omitted: with systemd 257+ they require
+# CAP_SYS_ADMIN at startup and keep the service from starting in containers, LXC
+# and other environments where systemd lacks full privileges.
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectSystem=full
+ProtectControlGroups=true
+UMask=0002
 
 # Resource limits
 LimitNOFILE=4096

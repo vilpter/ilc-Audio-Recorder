@@ -13,7 +13,31 @@ echo
 # Detect the script's directory (where the code lives)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 echo "Script location: $SCRIPT_DIR"
-cd "$SCRIPT_DIR"
+
+# Installed layout (1.12.0+): run the Python checks the way the service runs,
+# as the service account with the service's virtual environment and data paths.
+# Otherwise fall back to this checkout and the system Python.
+SERVICE_USER="audio-recorder"
+INSTALLED_APP_DIR="/opt/audio-recorder/app"
+INSTALLED_PY="/opt/audio-recorder/.venv/bin/python"
+if [ -x "$INSTALLED_PY" ] && id "$SERVICE_USER" >/dev/null 2>&1; then
+    APP_DIR="$INSTALLED_APP_DIR"
+    LOG_DIR="/var/log/audio-recorder"
+    PY=(sudo -u "$SERVICE_USER" env
+        AUDIO_RECORDER_STATE_DIR=/var/lib/audio-recorder
+        AUDIO_RECORDER_LOG_DIR=/var/log/audio-recorder
+        AUDIO_RECORDER_SERVICE_LOG_DIR=/var/log/audio-recorder
+        "$INSTALLED_PY")
+    AS_LOG=(sudo)   # logs are readable by the audio-recorder group only
+    echo "Checking installed service: $APP_DIR (Python checks run as '$SERVICE_USER'; sudo may prompt)"
+else
+    APP_DIR="$SCRIPT_DIR"
+    LOG_DIR="${AUDIO_RECORDER_LOG_DIR:-$HOME/.audio-recorder}"
+    PY=(python3)
+    AS_LOG=()
+    echo "No installed service found; checking this checkout with the system Python"
+fi
+cd "$APP_DIR" || exit 1
 
 # Colors for output
 RED='\033[0;31m'
@@ -78,9 +102,9 @@ fi
 # ============================================================
 print_section "STEP 3: Python Device Detection (Main Thread)"
 
-python3 -c "
+"${PY[@]}" -c "
 import sys
-sys.path.insert(0, '$SCRIPT_DIR')
+sys.path.insert(0, '$APP_DIR')
 try:
     from recorder import auto_detect_audio_device, get_available_audio_devices
     import threading
@@ -107,9 +131,9 @@ except ImportError as e:
 # ============================================================
 print_section "STEP 4: Python Device Detection (Background Thread - Simulates Scheduler)"
 
-python3 -c "
+"${PY[@]}" -c "
 import sys
-sys.path.insert(0, '$SCRIPT_DIR')
+sys.path.insert(0, '$APP_DIR')
 try:
     from recorder import auto_detect_audio_device, get_available_audio_devices
     import threading
@@ -149,9 +173,11 @@ except ImportError as e:
 # ============================================================
 print_section "STEP 5: Current Audio Configuration"
 
-python3 -c "
+"${PY[@]}" -c "
 import sys
-sys.path.insert(0, '$SCRIPT_DIR')
+sys.path.insert(0, '$APP_DIR')
+import logging
+logging.disable(logging.INFO)  # keep module startup logging out of the report
 try:
     import scheduler
 
@@ -265,19 +291,17 @@ fi
 # ============================================================
 print_section "STEP 9: Recent Log Entries"
 
-LOG_DIR="$HOME/.audio-recorder"
-
-if [ -f "$LOG_DIR/recorder.log" ]; then
+if "${AS_LOG[@]}" test -f "$LOG_DIR/recorder.log"; then
     echo "=== Last 20 lines of recorder.log ==="
-    tail -20 "$LOG_DIR/recorder.log"
+    "${AS_LOG[@]}" tail -20 "$LOG_DIR/recorder.log"
 else
     print_warn "No recorder.log found (will be created after first recording with new code)"
 fi
 
 echo
-if [ -f "$LOG_DIR/scheduler.log" ]; then
+if "${AS_LOG[@]}" test -f "$LOG_DIR/scheduler.log"; then
     echo "=== Last 20 lines of scheduler.log ==="
-    tail -20 "$LOG_DIR/scheduler.log"
+    "${AS_LOG[@]}" tail -20 "$LOG_DIR/scheduler.log"
 else
     print_warn "No scheduler.log found (will be created after first scheduled recording)"
 fi
@@ -287,9 +311,11 @@ fi
 # ============================================================
 print_section "STEP 10: Scheduled Jobs Status"
 
-python3 -c "
+"${PY[@]}" -c "
 import sys
-sys.path.insert(0, '$SCRIPT_DIR')
+sys.path.insert(0, '$APP_DIR')
+import logging
+logging.disable(logging.INFO)  # keep module startup logging out of the report
 try:
     import scheduler
 
@@ -322,12 +348,12 @@ echo "If both work in this test but scheduled recordings are silent:"
 echo "  -> Issue is timing/environment when scheduler runs"
 echo
 echo "QUICK FIX - Set explicit device:"
-echo "  cd $SCRIPT_DIR"
-echo "  python3 -c \"import scheduler; scheduler.set_system_config('audio_device', 'hw:1,0')\""
+echo "  Settings -> Audio Device in the web interface, or:"
+echo "  cd $APP_DIR && ${PY[*]} -c \"import scheduler; scheduler.set_system_config('audio_device', 'hw:1,0')\""
 echo
 echo "Check logs after next scheduled recording:"
-echo "  tail -f ~/.audio-recorder/recorder.log"
-echo "  tail -f ~/.audio-recorder/scheduler.log"
+echo "  tail -f $LOG_DIR/recorder.log"
+echo "  tail -f $LOG_DIR/scheduler.log"
 echo
 echo "============================================================"
 echo "Troubleshooting complete"

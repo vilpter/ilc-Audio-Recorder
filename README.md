@@ -14,10 +14,12 @@ A professional-grade dual-channel audio and video recording system with web-base
 - 4-hour duration limit with override option
 - Pre-flight disk space checking
 - Automatic post-recording analysis (silence detection, dB levels)
-- Audio artifact detection (digital clipping, upstream/analog flat-top clipping, discontinuities)
+- Audio artifact detection (digital clipping, upstream/analog flat-top clipping, discontinuities)¹
 - Traffic-light quality badges on Recordings page (green/yellow/red)
 - Interactive analysis modal showing per-channel metrics and quality details
 - Section tagging during recording (mark beginning/ending of segments for post-processing)
+
+¹ Requires numpy, see [Audio artifact detection support](#audio-artifact-detection-support).
 
 ### Video Recording
 - PTZOptics camera integration for synchronized A/V capture
@@ -68,6 +70,7 @@ A professional-grade dual-channel audio and video recording system with web-base
 
 ### Required (Audio)
 - **Raspberry Pi:** Pi 3B/3B+ or Pi 4 (2GB+ RAM recommended)
+- **OS:** 64-bit Linux with systemd, e.g. Raspberry Pi OS (64-bit); Python 3.9+
 - **Audio Interface:** Behringer UCA202 or UCA222 USB
 - **Storage:** 32GB+ SD card (Class 10 or better)
 - **Power Supply:** 5V/2.5A (Pi 3) or 5V/3A (Pi 4)
@@ -89,83 +92,91 @@ A professional-grade dual-channel audio and video recording system with web-base
 
 ### New Installation
 ```bash
+sudo apt install -y git python3 python3-venv ffmpeg alsa-utils
 cd ~
 git clone https://github.com/vilpter/ilc-Audio-Recorder.git audio-recorder
 cd audio-recorder
 ./install.sh
 ```
 
-### Upgrading Existing Installation
+### Upgrading
 ```bash
 cd ~/audio-recorder
 git pull
-./install.sh
-# Select "Upgrade" when prompted
+./install.sh --upgrade
 ```
 
 Access web interface at: `http://<raspberry-pi-ip>:5000`
 
-The installer handles:
-- System dependencies (Python, FFmpeg, ALSA, SQLite)
-- Python packages
-- ALSA configuration
-- Recordings directory
-- Systemd service setup
-- Log directories
+Run the installer as your normal user; it uses `sudo` where needed. It is safe to
+re-run and never deletes recordings or application data. Options:
+`--upgrade` (keep ALSA/udev configuration), `--fresh` (reinstall it and re-detect the
+audio device), `--yes` (no prompts).
 
-**Upgrade Mode** preserves your ALSA config, udev rules, and service customizations.
+### What the installer sets up
 
-## Installation (Manual)
+| Item | Location |
+|------|----------|
+| Application code (copied from your checkout) | `/opt/audio-recorder/app` |
+| Python virtual environment | `/opt/audio-recorder/.venv` |
+| Users, schedules, settings, secret key, backups | `/var/lib/audio-recorder` |
+| Logs | `/var/log/audio-recorder` |
+| Service | `audio-recorder.service`, running as the `audio-recorder` system account |
 
-If you prefer manual installation or the installer encounters issues:
+- **Python dependencies** are installed into the virtual environment from
+  `requirements.lock`, with every package pinned to an exact version and checked
+  against its hash. Nothing is installed into the system Python, so OS upgrades
+  and the app can't break each other.
+- **64-bit OS required.** The installer stops on a 32-bit system (including
+  32-bit Raspberry Pi OS on a Pi 4/5, whose kernel reports `aarch64`). If the
+  hash-verified install fails, it restores the previous version and stops.
+- <a id="audio-artifact-detection-support"></a>**Audio artifact detection support.**
+  Clipping and discontinuity detection uses numpy, installed from prebuilt
+  packages only. These exist for 64-bit ARM (Raspberry Pi OS 64-bit) and x86-64
+  with the Python versions in current Debian / Raspberry Pi OS releases. On other
+  combinations (other CPU types, or a Python release newer than numpy's prebuilt
+  packages) the installer installs everything else and ends with a
+  **NOTICE** that artifact detection is unavailable. Recording, scheduling and
+  level/silence analysis are unaffected. Re-running `./install.sh --upgrade`
+  retries the numpy install.
+- **Recordings directory:** the installer checks that the service account can write
+  to the configured storage path. On ext4 and similar drives it offers to grant the
+  `audio-recorder` group access. FAT/exFAT drives get their permissions from mount
+  options, so the installer prints the `/etc/fstab` change to make.
+- **Your user** is added to the `audio-recorder` group so you can read logs and
+  manage recordings (log out and back in once for this to apply).
+- **Upgrading from before 1.12.0:** data in `~/.audio-recorder` is copied to
+  `/var/lib/audio-recorder` (the original is left in place for you to remove) and the
+  old service file is saved to `/opt/audio-recorder/backup/`.
+- **Rollback:** the previous code and virtual environment are kept as
+  `/opt/audio-recorder/app.prev` and `.venv.prev`.
+- **Service customizations** belong in a drop-in, which upgrades keep:
+  `sudo systemctl edit audio-recorder`. The main unit file is replaced on every install.
 
-### Step 1: System Updates
+## Manual Installation
+
+The installer is the supported path. To see what it does, read `install.sh`; the
+steps are: create the `audio-recorder` system account (in the `audio` group), copy
+the code to `/opt/audio-recorder/app`, create the virtual environment with
+`python3 -m venv /opt/audio-recorder/.venv` and
+`/opt/audio-recorder/.venv/bin/python -m pip install --require-hashes -r requirements.lock`,
+make the recordings directory writable by the account, copy
+`configs/asound.conf` to `/etc/asound.conf`, and install `audio-recorder.service`.
+
+## Development
 
 ```bash
-sudo apt update && sudo apt upgrade -y
+python3 -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
+.venv/bin/python -m pytest
 ```
 
-### Step 2: Install Dependencies
+Runtime dependencies are declared in `pyproject.toml`. After changing them, regenerate
+both lock files with the `uv pip compile` commands listed there.
 
-```bash
-sudo apt install -y python3-pip ffmpeg alsa-utils sqlite3 git
-```
-
-### Step 3: Install Python Dependencies
-
-```bash
-cd ~/audio-recorder
-pip3 install -r requirements.txt --break-system-packages
-```
-
-### Step 4: Configure ALSA
-
-```bash
-sudo cp configs/asound.conf /etc/asound.conf
-sudo alsactl kill rescan
-
-# Verify UCA202 is detected
-arecord -l
-# Should show: card 1: CODEC [USB Audio CODEC]
-```
-
-### Step 5: Create Directories
-
-```bash
-mkdir -p ~/recordings
-mkdir -p ~/.audio-recorder
-```
-
-### Step 6: Install Systemd Service
-
-```bash
-sudo mkdir -p /var/log/audio-recorder
-sudo chown $USER:$USER /var/log/audio-recorder
-sudo cp audio-recorder.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable audio-recorder
-sudo systemctl start audio-recorder
-```
+When run from a checkout, the app keeps its data in `~/.audio-recorder`. Set
+`AUDIO_RECORDER_STATE_DIR` (and optionally `AUDIO_RECORDER_LOG_DIR`) to use another
+location; see `config.py`.
 
 ## Usage
 
@@ -212,17 +223,20 @@ audio-recorder/
 ├── video_recorder.py         # Video capture and transcoding
 ├── scheduler.py              # Job scheduling (APScheduler)
 ├── auth.py                   # Authentication module
-├── requirements.txt          # Python dependencies
+├── config.py                 # State, log and backup paths
+├── pyproject.toml            # Project metadata and top-level dependencies
+├── requirements.lock         # Pinned, hashed runtime dependencies
+├── requirements-dev.lock     # Same, plus test dependencies
 ├── audio-recorder.service    # Systemd service file
-├── install.sh                # Automated installer
+├── install.sh                # Installer / upgrader
 ├── configure_audio.sh        # Audio configuration helper
-├── fix_service.sh            # Service troubleshooting script
 ├── troubleshoot_audio.sh     # Diagnostic script for scheduled recordings
 ├── audio_analyzer.py         # Audio analysis module (silence detection, dB levels)
 ├── artifact_detector.py      # Audio artifact detection (clipping, discontinuities)
 ├── configs/
 │   ├── asound.conf           # ALSA configuration
 │   └── 85-usb-audio.rules    # udev rules for USB audio
+├── tests/                    # pytest suite
 └── templates/                # HTML templates
     ├── calendar.html         # Schedule page (home page with calendar)
     ├── camera.html           # New/In Progress (recording controls)
@@ -318,13 +332,12 @@ Import features:
 ### Service Won't Start
 
 ```bash
-# Run the fix script
-./fix_service.sh
-
-# Or manually check
 sudo systemctl status audio-recorder
 sudo journalctl -u audio-recorder -n 50
-tail -f /var/log/audio-recorder/app.log
+sudo tail -50 /var/log/audio-recorder/error.log
+
+# Re-running the installer repairs the service, account and permissions
+cd ~/audio-recorder && ./install.sh --upgrade
 ```
 
 ### UCA202 Not Detected
@@ -450,7 +463,8 @@ On first access, you'll be prompted to create an admin account:
 - Designed for **local network use**
 - For remote access, use SSH tunneling or VPN
 - Credentials stored with secure password hashing (Werkzeug)
-- Session secret key auto-generated and stored in `~/.audio-recorder/`
+- Session secret key auto-generated and stored (mode 600) in `/var/lib/audio-recorder/`
+- The service runs as an unprivileged `audio-recorder` account with a read-only `/usr`, `/boot` and `/etc`
 
 ## Roadmap
 
@@ -460,7 +474,7 @@ On first access, you'll be prompted to create an admin account:
 
 ## Built With
 
-- **Backend:** Python 3.11+, Flask, Flask-Login, APScheduler
+- **Backend:** Python 3.9+, Flask, Flask-Login, APScheduler
 - **Frontend:** HTML5, Tailwind CSS, Vanilla JavaScript
 - **Audio:** FFmpeg, ALSA
 - **Database:** SQLite3
@@ -471,7 +485,7 @@ On first access, you'll be prompted to create an admin account:
 After completing development work, ensure the following are updated:
 
 1. **Version Numbers**
-   - Update `__version__` in `app.py`
+   - Update `__version__` in `app.py` and `version` in `pyproject.toml` (a test checks they match)
    - Update version at bottom of `README.md`
    - Add entry to `CHANGELOG.md`
 
@@ -481,16 +495,16 @@ After completing development work, ensure the following are updated:
    - Update `ARCHITECTURE.md` if API or schema changed
 
 3. **Testing**
-   - Verify Python syntax: `python3 -m py_compile app.py auth.py`
+   - Run the test suite: `.venv/bin/python -m pytest`
    - Test affected functionality in browser
    - Check for console errors in browser dev tools
 
 ## Support
 
 - **Issues:** [GitHub Issues](https://github.com/vilpter/ilc-Audio-Recorder/issues)
-- **Quick Fixes:** Run `./fix_service.sh` or `./configure_audio.sh`
+- **Quick Fixes:** Re-run `./install.sh --upgrade`, or run `./configure_audio.sh` / `./troubleshoot_audio.sh`
 
 ---
 
-**Version:** 1.10.0
-**Last Updated:** 2026-02-10
+**Version:** 1.12.0
+**Last Updated:** 2026-11-04

@@ -2,6 +2,40 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.12.0] - 2026-11-04
+
+### Changed
+- **Deployment rebuilt around a virtual environment and a service account** - `install.sh` now:
+  - Creates an unprivileged `audio-recorder` system account (in the `audio` group) and runs the service as it, instead of the login user
+  - Copies the code to `/opt/audio-recorder/app` (root-owned) and installs Python packages into `/opt/audio-recorder/.venv`; `pip install --break-system-packages` is gone
+  - Keeps data in `/var/lib/audio-recorder` and all logs in `/var/log/audio-recorder` (`StateDirectory`/`LogsDirectory`)
+  - Installs a static `audio-recorder.service` that runs the venv interpreter, with `ProtectSystem=full`, `PrivateTmp`, `NoNewPrivileges` and `ProtectControlGroups`. The unit is replaced on every install; local changes go in a drop-in (`systemctl edit`)
+  - Is safe to re-run, never deletes data, keeps the previous code and venv (`app.prev`, `.venv.prev`), rolls back automatically if dependency installation fails, verifies the web interface responds, and accepts `--fresh`, `--upgrade` and `--yes`
+  - Checks the recordings directory is writable by the service account: offers to grant group access on ext4-type drives, prints the `/etc/fstab` change for FAT/exFAT/NTFS drives, and reports parent directories (such as a 0700 home directory) the service cannot enter
+  - Adds the installing user to the `audio-recorder` group to read logs and manage recordings
+- **Migration from earlier versions** - On upgrade, `~/.audio-recorder` (users, schedules, settings, secret key, backups) is copied to `/var/lib/audio-recorder` and its logs to `/var/log/audio-recorder`; the original is left in place. The old unit file is saved to `/opt/audio-recorder/backup/`.
+- **Dependencies** - `pyproject.toml` now declares project metadata, top-level dependencies and pytest settings. `requirements.lock` / `requirements-dev.lock` pin every package with hashes for Python 3.9+ on all platforms (generated with `uv pip compile --universal`). Removed unused `SQLAlchemy` and `python-dateutil`; `pytz` and `tzlocal` remain as APScheduler dependencies. Minimum Python is now 3.9.
+- **64-bit OS required** - The installer checks the Python build and stops on 32-bit systems (32-bit Raspberry Pi OS included, even on a Pi 4/5 where `uname -m` reports `aarch64`). Dependencies are always installed hash-verified.
+- **Audio artifact detection where supported** - numpy is installed hash-verified from prebuilt packages. Where none exists for the platform, the installer installs everything else, still hash-verified, and ends with a notice that clipping/discontinuity detection is unavailable. Re-running the installer retries numpy.
+- **Secret key** created with mode 600.
+- **`troubleshoot_audio.sh`** checks the installed service: Python checks run as the service account with its venv and data paths. Log noise no longer hides the configuration and job summaries.
+- **`configure_audio.sh`** no longer claims to edit `recorder.py` (the device is auto-detected or chosen in Settings).
+
+### Fixed
+- **Artifact detection without numpy** - `artifact_detector.py` failed to import when numpy was missing (type hints referenced `np`), so the "optional" fallback logged an error after every recording instead of skipping cleanly.
+
+### Removed
+- `fix_service.sh` (re-running `./install.sh --upgrade` repairs the service; the old script would have reverted it to running as the login user)
+- `requirements.txt`, `requirements-dev.txt` (replaced by `pyproject.toml` and the lock files)
+
+### Upgrade notes
+- Update with `git pull && ./install.sh --upgrade` from your checkout.
+- After upgrading, confirm users/schedules/settings, then optionally `rm -rf ~/.audio-recorder`.
+- Packages previously installed into the system Python or `~/.local` by older installers are no longer used and can be removed.
+- If the recordings drive is FAT/exFAT, follow the installer's `/etc/fstab` instruction so the service account can write to it.
+
+---
+
 ## [1.11.0] - 2026-11-04
 
 ### Changed
@@ -23,7 +57,7 @@ All notable changes to the Church Recording project are documented in this file.
 - **Directory browser in Settings always failed** - `/api/directories/list` and `/api/directories/create` called an unimported `validate_path` and an unimported `session`; they now use `validation.validate_path` and `current_user.username`.
 
 ### Added
-- **Test suite** - `tests/` with pytest smoke tests (every non-public route requires login, main pages render) and regression tests for the fixes above. Run with `pip install -r requirements-dev.txt && pytest`.
+- **Test suite** - `tests/` with pytest smoke tests (every non-public route requires login, main pages render) and regression tests for the fixes above. Run with `pytest` (dev setup instructions in README).
 
 ---
 

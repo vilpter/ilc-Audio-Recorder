@@ -4,6 +4,7 @@ Authentication Module for Audio Recorder
 Handles user management and session authentication
 """
 
+import os
 import sqlite3
 import secrets
 from pathlib import Path
@@ -268,7 +269,10 @@ def generate_secret_key():
     # Generate new secret key
     secret_key = secrets.token_hex(32)
     secret_key_path.parent.mkdir(parents=True, exist_ok=True)
-    secret_key_path.write_text(secret_key)
+    # Create owner-only from the start (the service runs with a group-writable umask)
+    fd = os.open(secret_key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        f.write(secret_key)
 
     return secret_key
 

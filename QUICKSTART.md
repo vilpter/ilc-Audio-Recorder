@@ -17,6 +17,7 @@
 ### Installation (New Install)
 
 ```bash
+sudo apt install -y git python3 python3-venv ffmpeg alsa-utils
 cd ~
 git clone https://github.com/vilpter/ilc-Audio-Recorder.git audio-recorder
 cd audio-recorder
@@ -28,17 +29,18 @@ cd audio-recorder
 ```bash
 cd ~/audio-recorder
 git pull
-./install.sh
-# Select "Upgrade" when prompted
+./install.sh --upgrade
 ```
 
-The installer handles:
-- System dependencies (Python, FFmpeg, ALSA)
-- Python packages
-- ALSA configuration
-- Recordings directory
-- Systemd service setup
-- Log directories
+The installer:
+- Creates the `audio-recorder` service account and copies the code to `/opt/audio-recorder/app`
+- Installs pinned Python packages into `/opt/audio-recorder/.venv` (never the system Python)
+- Keeps data in `/var/lib/audio-recorder` and logs in `/var/log/audio-recorder`
+  (installs from before 1.12.0 are migrated from `~/.audio-recorder`)
+- Checks the recordings directory is writable by the service and tells you how to fix it if not
+- Installs ALSA configuration and the systemd service
+
+See the README's *What the installer sets up* section for details.
 
 ### Access the Web UI
 
@@ -101,12 +103,11 @@ rm test.wav
 
 **Web UI not accessible?**
 ```bash
-# Run the fix script
-./fix_service.sh
-
-# Or manually check
 sudo systemctl status audio-recorder
-tail -f /var/log/audio-recorder/app.log
+sudo tail -50 /var/log/audio-recorder/error.log
+
+# Re-running the installer repairs the service, account and permissions
+cd ~/audio-recorder && ./install.sh --upgrade
 ```
 
 **UCA202 not found?**
@@ -122,7 +123,7 @@ sudo reboot
 **Recording fails?**
 ```bash
 # Check disk space
-df -h ~/recordings
+df -h /mnt/usb_recorder   # or your configured storage path
 
 # Test FFmpeg manually
 ffmpeg -f alsa -i hw:1 -t 5 \

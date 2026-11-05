@@ -7,14 +7,14 @@ This document provides technical details for developers and system administrator
 ## Technology Stack
 
 ### Backend
-- **Python 3.11+** (ARM64 optimized)
+- **Python 3.9+** in a dedicated virtual environment (`/opt/audio-recorder/.venv`)
 - **Flask 3.0.0** - Lightweight web framework
 - **Flask-Login** - Session authentication
 - **APScheduler 3.10.4** - Background job scheduling
 - **SQLite3** - Database for schedules, config, and users
 - **FFmpeg** - Audio/video processing (system package)
 - **ALSA** - Audio hardware interface (system package)
-- **NumPy** - Sample-level audio artifact analysis
+- **NumPy** - Sample-level audio artifact analysis (optional; without it, clipping/discontinuity detection is skipped and level/silence analysis still runs)
 - **Requests** - HTTP client for camera control
 
 ### Frontend
@@ -24,7 +24,7 @@ This document provides technical details for developers and system administrator
 - **Fetch API** - REST communication
 
 ### System Integration
-- **systemd** - Service management
+- **systemd** - Service management (unprivileged `audio-recorder` account, `ProtectSystem=full`)
 - **ALSA** - Audio device configuration
 - **udev** - Device rule management
 - **h264_v4l2m2m** - Hardware-accelerated video encoding (Raspberry Pi)
@@ -55,7 +55,7 @@ This document provides technical details for developers and system administrator
 
 ## Database Schema
 
-### Schedule Database (`~/.audio-recorder/schedule.db`)
+### Schedule Database (`<state dir>/schedule.db`)
 
 #### `scheduled_jobs` Table
 ```sql
@@ -175,7 +175,7 @@ Fields:
 - `artifact_details` - JSON blob with timestamps and details of detected issues
 - `artifact_version` - Schema version for artifact detection algorithm
 
-### Authentication Database (`~/.audio-recorder/auth.db`)
+### Authentication Database (`<state dir>/auth.db`)
 
 #### `users` Table
 ```sql
@@ -297,9 +297,8 @@ CREATE TABLE users (
 - **Disk space pre-flight** - Check 2x estimated size before starting
 
 ### Storage Strategy
-- **Audio files** - `~/recordings/` (on SD card)
-- **Video files** - USB storage (configurable path)
-- **Databases** - `~/.audio-recorder/` (hidden directory)
+- **Audio and video files** - configurable storage path (default `/mnt/usb_recorder`, typically a USB drive)
+- **Databases** - state directory (`/var/lib/audio-recorder/` when installed)
 
 ### Security
 - **Session-based authentication** - Flask-Login with secure sessions
@@ -318,12 +317,12 @@ church-recording/
 ├── scheduler.py              # Job scheduling (APScheduler)
 ├── auth.py                   # User authentication
 ├── config.py                 # State, log and backup paths (env-overridable)
-├── requirements.txt          # Python dependencies
-├── requirements-dev.txt      # Test dependencies (pytest)
+├── pyproject.toml            # Project metadata, top-level dependencies, pytest config
+├── requirements.lock         # Pinned, hashed runtime dependencies (generated)
+├── requirements-dev.lock     # Same plus test dependencies (generated)
 ├── tests/                    # pytest suite
-├── audio-recorder.service    # systemd service file
-├── install.sh                # Automated installer
-├── fix_service.sh            # Service repair script
+├── audio-recorder.service    # systemd unit (installed to /etc/systemd/system)
+├── install.sh                # Installer / upgrader / migrator
 ├── configure_audio.sh        # Audio device setup script
 ├── troubleshoot_audio.sh     # Scheduled recording diagnostics
 ├── audio_analyzer.py         # Audio analysis utilities (future)
@@ -346,21 +345,31 @@ church-recording/
 
 ## Storage Locations
 
+Installed by `install.sh` (1.12.0+):
+
 | Data | Location | Notes |
 |------|----------|-------|
-| Audio recordings | `~/recordings/` | WAV files with timestamp names |
-| Video recordings | `/mnt/usb_recorder/` | Configurable in Settings |
-| Schedule database | `~/.audio-recorder/schedule.db` | SQLite |
-| Auth database | `~/.audio-recorder/auth.db` | SQLite |
-| Application logs | `/var/log/audio-recorder/app.log` | General application log |
-| Error logs | `/var/log/audio-recorder/error.log` | Error-level messages |
-| Recorder logs | `~/.audio-recorder/recorder.log` | Audio capture operations |
-| Scheduler logs | `~/.audio-recorder/scheduler.log` | Scheduled job execution |
-| FFmpeg logs | `~/.audio-recorder/ffmpeg.log` | FFmpeg stderr output |
-| Service file | `/etc/systemd/system/audio-recorder.service` | Installed by install.sh |
+| Application code | `/opt/audio-recorder/app` | Root-owned copy of the checkout; previous version in `app.prev` |
+| Python environment | `/opt/audio-recorder/.venv` | Built from `requirements.lock`; previous in `.venv.prev` |
+| Audio and video recordings | `/mnt/usb_recorder/` | Configurable in Settings → Storage Location |
+| Schedule database | `/var/lib/audio-recorder/schedule.db` | SQLite |
+| Auth database | `/var/lib/audio-recorder/auth.db` | SQLite |
+| Session secret key | `/var/lib/audio-recorder/secret_key` | Mode 600 |
+| Import backups | `/var/lib/audio-recorder/backups/` | See Backup Files |
+| Application logs | `/var/log/audio-recorder/app.log` | Service stdout |
+| Error logs | `/var/log/audio-recorder/error.log` | Service stderr |
+| Recorder logs | `/var/log/audio-recorder/recorder.log` | Audio capture operations |
+| Scheduler logs | `/var/log/audio-recorder/scheduler.log` | Scheduled job execution |
+| FFmpeg logs | `/var/log/audio-recorder/ffmpeg.log` | FFmpeg stderr output |
+| Service file | `/etc/systemd/system/audio-recorder.service` | Replaced on each install; customize with `systemctl edit` |
 
-All state and log paths are defined in `config.py`. The defaults above can be
-overridden with environment variables (for example in the systemd unit):
+The service runs as the `audio-recorder` system account (member of `audio`).
+Installs before 1.12.0 kept data and logs in `~/.audio-recorder` and ran as the
+login user; `install.sh` migrates them.
+
+All state and log paths are defined in `config.py`. The installed unit sets them
+with environment variables; without them (e.g. running from a checkout) the
+defaults below apply:
 
 | Variable | Default | Controls |
 |----------|---------|----------|
@@ -383,7 +392,7 @@ overridden with environment variables (for example in the systemd unit):
 - Audio device, channel suffixes, camera settings
 
 ### Backup Location
-Pre-import backups are stored in `~/.audio-recorder/backups/` (`config.BACKUP_DIR`):
+Pre-import backups are stored in `<state dir>/backups/` (`config.BACKUP_DIR`; `/var/lib/audio-recorder/backups/` when installed):
 - `schedules.sched.last` - Auto-created before schedule import
 - `config.conf.last` - Auto-created before config import
 

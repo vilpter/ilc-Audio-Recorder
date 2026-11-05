@@ -14,6 +14,8 @@ Detection types:
   - Discontinuities: sudden jumps flagged via adaptive statistical threshold
 """
 
+from __future__ import annotations
+
 import subprocess
 import json
 import logging

@@ -95,3 +95,31 @@ def test_revert_status_uses_backup_dir(logged_in):
         assert resp.get_json()['schedules_available'] is True
     finally:
         marker.unlink()
+
+
+def test_pyproject_version_matches_app():
+    import re
+    import app as app_module
+    text = (ROOT / 'pyproject.toml').read_text()
+    assert re.search(r'^version = "([^"]+)"', text, re.M).group(1) == app_module.__version__
+
+
+def test_lock_files_cover_pyproject_dependencies():
+    import re
+    deps = re.search(r'^dependencies = \[(.*?)\]', (ROOT / 'pyproject.toml').read_text(), re.M | re.S).group(1)
+    names = {name.lower() for name in re.findall(r'^\s*"([A-Za-z0-9_.-]+)', deps, re.M)}
+    assert len(names) == 6
+    for lock in ('requirements.lock', 'requirements-dev.lock'):
+        locked = set(re.findall(r'^([a-z0-9_.-]+)==', (ROOT / lock).read_text(), re.M))
+        assert names <= locked, f'{lock} is stale; regenerate it (see pyproject.toml)'
+    assert 'pytest' in (ROOT / 'requirements-dev.lock').read_text()
+
+
+def test_service_unit_matches_config_env():
+    unit = (ROOT / 'audio-recorder.service').read_text()
+    assert 'ExecStart=/opt/audio-recorder/.venv/bin/python /opt/audio-recorder/app/app.py' in unit
+    assert 'User=audio-recorder' in unit
+    for var in ('AUDIO_RECORDER_STATE_DIR=/var/lib/audio-recorder',
+                'AUDIO_RECORDER_LOG_DIR=/var/log/audio-recorder',
+                'AUDIO_RECORDER_SERVICE_LOG_DIR=/var/log/audio-recorder'):
+        assert f'Environment={var}' in unit

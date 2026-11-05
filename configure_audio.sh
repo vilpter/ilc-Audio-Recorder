@@ -29,10 +29,8 @@ if [ -z "$CARD" ]; then
     echo "  3. Try different USB port"
     echo ""
     echo "Manual device selection:"
-    echo "Look at the output above and note your card number."
-    echo "Then edit ~/audio-recorder/recorder.py line 109:"
-    echo "  Change: device='hw:1'"
-    echo "  To:     device='hw:X'  (where X is your card number)"
+    echo "Look at the output above and note your card number X, then choose"
+    echo "hw:X under Settings → Audio Device Configuration in the web interface."
     echo ""
     exit 1
 fi
@@ -57,33 +55,9 @@ if [ $? -eq 0 ]; then
     # Clean up
     rm -f /tmp/test_audio.wav
     
-    # Update recorder.py if needed
-    if [ "$CARD" != "1" ]; then
-        echo ""
-        echo "⚠️  Device is on card $CARD (not the default card 1)"
-        echo ""
-        echo "Updating recorder.py configuration..."
-        
-        RECORDER_FILE="$HOME/audio-recorder/recorder.py"
-        
-        if [ -f "$RECORDER_FILE" ]; then
-            # Backup original
-            cp "$RECORDER_FILE" "$RECORDER_FILE.backup"
-            
-            # Update default device
-            sed -i "s/device='hw:1'/device='hw:$CARD'/" "$RECORDER_FILE"
-            
-            echo "✓ Updated recorder.py to use hw:$CARD"
-            echo "  (Backup saved as recorder.py.backup)"
-        else
-            echo "❌ recorder.py not found at $RECORDER_FILE"
-            echo "   Please manually edit the file and change:"
-            echo "   device='hw:1' to device='hw:$CARD'"
-        fi
-    else
-        echo ""
-        echo "✓ Device is on card 1 (default) - no configuration changes needed"
-    fi
+    echo ""
+    echo "✓ The recorder auto-detects this device by default."
+    echo "  To pin it explicitly, choose hw:$CARD under Settings → Audio Device Configuration in the web interface."
     
     echo ""
     echo "=========================================="

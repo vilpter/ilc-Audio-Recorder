@@ -37,7 +37,7 @@ Use this checklist when deploying Audio/Video Recorder to a new Raspberry Pi.
 - [ ] Wait 2-3 minutes for initialization
 - [ ] Connect via SSH: `ssh pi@audio-recorder.local`
 - [ ] Verify OS version: `cat /etc/os-release`
-- [ ] Verify 64-bit: `uname -m` (should show `aarch64`)
+- [ ] Verify 64-bit OS: `getconf LONG_BIT` (should show `64`; `uname -m` alone can show `aarch64` on 32-bit Pi OS)
 
 ## System Configuration
 
@@ -52,6 +52,7 @@ The `install.sh` script handles most installation steps automatically.
 
 ### Clone and Install
 ```bash
+sudo apt install -y git python3 python3-venv ffmpeg alsa-utils
 cd ~
 git clone https://github.com/vilpter/ilc-Audio-Recorder.git audio-recorder
 cd audio-recorder
@@ -61,12 +62,15 @@ cd audio-recorder
 ### Verify Installation
 - [ ] Check service status: `sudo systemctl status audio-recorder`
 - [ ] Verify "active (running)" status
-- [ ] Check logs: `tail -20 /var/log/audio-recorder/app.log`
+- [ ] Installer ends with "✓ Installation complete" and no "ACTION NEEDED" message
+- [ ] Service runs as the service account: `systemctl show -p User audio-recorder` shows `User=audio-recorder`
+- [ ] Check logs: `sudo tail -20 /var/log/audio-recorder/app.log`
 
 ### Manual Steps (if needed)
 If the installer encounters issues, use the helper scripts:
 - [ ] Audio issues: `./configure_audio.sh`
-- [ ] Service issues: `./fix_service.sh`
+- [ ] Service issues: re-run `./install.sh --upgrade`
+- [ ] Diagnostics: `./troubleshoot_audio.sh`
 
 ## Post-Installation Testing
 
@@ -148,8 +152,8 @@ If the installer encounters issues, use the helper scripts:
 - [ ] Store backup files safely
 
 ### Backup Strategy
-- [ ] Document recordings location: `~/recordings`
-- [ ] Document database location: `~/.audio-recorder/`
+- [ ] Document recordings location (Settings → Storage Location; default `/mnt/usb_recorder`)
+- [ ] Document data location: `/var/lib/audio-recorder/` (users, schedules, settings, secret key)
 - [ ] Export schedules and config from Settings page
 - [ ] Set up external backup destination (if applicable)
 

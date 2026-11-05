@@ -1,0 +1,31 @@
+[project]
+name = "ilc-audio-recorder"
+version = "1.12.0"
+description = "Raspberry Pi dual-mono audio recorder with scheduling and PTZ camera capture"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+
+# Top-level runtime dependencies. After changing these, regenerate the lock files:
+#   uv pip compile pyproject.toml --universal --python-version 3.9 --generate-hashes -o requirements.lock
+#   uv pip compile pyproject.toml --universal --python-version 3.9 --generate-hashes --extra dev -o requirements-dev.lock
+dependencies = [
+    "Flask==3.0.0",
+    "Werkzeug==3.0.1",
+    "Flask-Login==0.6.3",
+    "APScheduler==3.10.4",
+    "requests==2.31.0",
+    "numpy>=1.24,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+]
+
+# Not an installable package (yet): there is no [build-system]. The project runs
+# from its source directory with dependencies installed from requirements.lock.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
