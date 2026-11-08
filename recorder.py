@@ -625,7 +625,7 @@ def _analyze_recording(source_a, source_b, job_timestamp):
 
 def analyze_unanalyzed_recordings(exclude=()):
     """
-    Check for WAV files without analysis and analyze them.
+    Check for WAV files without a successful analysis and analyze them.
     Called on app startup and after each recording (with that recording's
     files in exclude, since they are analyzed separately).
     """
@@ -639,11 +639,11 @@ def analyze_unanalyzed_recordings(exclude=()):
     if not recordings_dir.exists():
         return
 
-    # Get all analyzed filenames
+    # Get all analyzed filenames (failed analyses are retried)
     analyzed_files = set()
     try:
         results = db_utils.fetch_all(DB_PATH,
-            'SELECT DISTINCT filename FROM audio_analysis')
+            "SELECT DISTINCT filename FROM audio_analysis WHERE status != 'failed'")
         analyzed_files = {row[0] for row in results}
     except:
         pass  # Table might not exist yet

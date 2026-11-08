@@ -11,6 +11,7 @@ Uses FFmpeg for analysis via subprocess calls.
 
 import subprocess
 import json
+import math
 import re
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
@@ -53,6 +54,18 @@ class AudioAnalysisResult:
             ],
             'overall_non_silent_percentage': self.overall_non_silent_percentage
         }
+
+
+def _parse_db(text):
+    """Parse a dB value printed by ffmpeg, or None if it isn't a finite number.
+
+    astats prints "-inf" for frames of digital silence (and "nan" in some cases).
+    """
+    try:
+        value = float(text)
+    except ValueError:
+        return None
+    return value if math.isfinite(value) else None
 
 
 class AudioAnalyzer:
@@ -184,7 +197,7 @@ class AudioAnalyzer:
         """
         # Extract single channel and detect silence
         cmd = [
-            'ffmpeg',
+            'ffmpeg', '-nostats',
             '-i', filepath,
             '-af', f'pan=mono|c0=c{channel_num},'
                    f'silencedetect=noise={self.silence_threshold_db}dB:'
@@ -201,9 +214,9 @@ class AudioAnalyzer:
         
         for line in result.stdout.split('\n'):
             if 'silence_start' in line:
-                match = re.search(r'silence_start: ([\d.]+)', line)
+                match = re.search(r'silence_start: (-?[\d.]+)', line)
                 if match:
-                    silence_start = float(match.group(1))
+                    silence_start = max(0.0, float(match.group(1)))
             elif 'silence_end' in line and silence_start is not None:
                 match = re.search(r'silence_end: ([\d.]+)', line)
                 if match:
@@ -231,14 +244,17 @@ class AudioAnalyzer:
         # Build filter to exclude silence periods and get stats
         # We'll use astats filter to get RMS (mean) and peak (max) levels
         cmd = [
-            'ffmpeg',
+            'ffmpeg', '-nostats',
             '-i', filepath,
             '-af', f'pan=mono|c0=c{channel_num},astats=metadata=1:reset=1,ametadata=print:file=-',
             '-f', 'null',
             '-'
         ]
-        
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+        # The levels are printed to stdout. Keep stderr (FFmpeg's log) out of it:
+        # merged into the same pipe, its lines can land in the middle of a value
+        # (e.g. "Peak_level=-" + "size=N/A time=...").
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
         
         # Parse astats output to collect dB values over time
         rms_values = []
@@ -254,19 +270,21 @@ class AudioAnalyzer:
                 current_time = float(pts_match.group(1))
             
             # Extract RMS level (mean)
-            rms_match = re.search(r'lavfi\.astats\.Overall\.RMS_level=([-\d.]+)', line)
+            # Digital silence (all-zero samples) is reported as -inf; skip it,
+            # since it would make the average -inf
+            rms_match = re.search(r'lavfi\.astats\.Overall\.RMS_level=(\S+)', line)
             if rms_match:
-                rms_db = float(rms_match.group(1))
+                rms_db = _parse_db(rms_match.group(1))
                 # Check if this time is in a non-silent period
-                if not self._is_in_silence(current_time, silence_periods):
+                if rms_db is not None and not self._is_in_silence(current_time, silence_periods):
                     rms_values.append(rms_db)
             
             # Extract Peak level (max)
-            peak_match = re.search(r'lavfi\.astats\.Overall\.Peak_level=([-\d.]+)', line)
+            peak_match = re.search(r'lavfi\.astats\.Overall\.Peak_level=(\S+)', line)
             if peak_match:
-                peak_db = float(peak_match.group(1))
+                peak_db = _parse_db(peak_match.group(1))
                 # Check if this time is in a non-silent period
-                if not self._is_in_silence(current_time, silence_periods):
+                if peak_db is not None and not self._is_in_silence(current_time, silence_periods):
                     peak_values.append(peak_db)
                     if peak_db > max_peak:
                         max_peak = peak_db
@@ -303,7 +321,7 @@ class AudioAnalyzer:
         # Run silencedetect on the full stereo/multi-channel file
         # This will detect silence only when ALL channels are silent
         cmd = [
-            'ffmpeg',
+            'ffmpeg', '-nostats',
             '-i', filepath,
             '-af', f'silencedetect=noise={self.silence_threshold_db}dB:'
                    f'd={self.silence_duration_sec}',
@@ -319,9 +337,9 @@ class AudioAnalyzer:
         
         for line in result.stdout.split('\n'):
             if 'silence_start' in line:
-                match = re.search(r'silence_start: ([\d.]+)', line)
+                match = re.search(r'silence_start: (-?[\d.]+)', line)
                 if match:
-                    silence_start = float(match.group(1))
+                    silence_start = max(0.0, float(match.group(1)))
             elif 'silence_end' in line and silence_start is not None:
                 match = re.search(r'silence_end: ([\d.]+)', line)
                 if match:

@@ -126,6 +126,33 @@ def test_catch_up_scan_skips_excluded_files(monkeypatch, _storage_dir):
             (_storage_dir / n).unlink()
 
 
+def test_catch_up_scan_retries_failed_analyses(monkeypatch, _storage_dir):
+    import db_utils
+    from scheduler import DB_PATH
+    names = {'2026_Jan_03_10:00_L.wav': 'failed', '2026_Jan_03_10:00_R.wav': 'failed',
+             '2026_Jan_04_10:00_L.wav': 'completed', '2026_Jan_04_10:00_R.wav': 'completed'}
+    for n, status in names.items():
+        (_storage_dir / n).write_bytes(b'RIFF')
+        db_utils.execute_query(DB_PATH, '''
+            INSERT OR REPLACE INTO audio_analysis (filename, channel, analyzed_at, status)
+            VALUES (?, 'left', '2026-01-01', ?)''', (n, status), commit=True)
+    started = []
+    monkeypatch.setattr(recorder, 'load_channel_suffixes', lambda: ('L', 'R'))
+    monkeypatch.setattr(recorder, '_analyze_recording_delayed', lambda *a: started.append(a[2]))
+    real_thread = threading.Thread
+    monkeypatch.setattr(threading, 'Thread', lambda target, args=(), kwargs=None, daemon=None:
+                        real_thread(target=target, args=args, kwargs=kwargs or {}))
+    try:
+        recorder.analyze_unanalyzed_recordings()
+        time.sleep(0.1)
+        assert '2026_Jan_03_10:00' in started
+        assert '2026_Jan_04_10:00' not in started
+    finally:
+        for n in names:
+            (_storage_dir / n).unlink()
+            db_utils.execute_query(DB_PATH, 'DELETE FROM audio_analysis WHERE filename = ?',
+                                   (n,), commit=True)
+
 def test_stop_capture_does_not_start_a_second_analysis(monkeypatch):
     scans = []
     monkeypatch.setattr(recorder, 'analyze_unanalyzed_recordings', lambda **k: scans.append(k))

@@ -533,5 +533,5 @@ After completing development work, ensure the following are updated:
 
 ---
 
-**Version:** 1.12.3
+**Version:** 1.12.4
 **Last Updated:** 2026-11-04

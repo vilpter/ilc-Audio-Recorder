@@ -29,7 +29,7 @@ import auth
 import db_utils
 import validation
 
-__version__ = '1.12.3'
+__version__ = '1.12.4'
 
 app = Flask(__name__)
 

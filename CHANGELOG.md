@@ -2,6 +2,13 @@
 
 All notable changes to the Church Recording project are documented in this file.
 
+## [1.12.4] - 2026-11-08
+
+### Fixed
+- **Audio analysis failed with "could not convert string to float: '-'"** - The analyzer read FFmpeg's level measurements from the same pipe as FFmpeg's progress output. On the Pi the two can interleave mid-line, splitting a value such as `Peak_level=-12.3` into `Peak_level=-` and a progress line. The measurements are now read on their own, with progress output turned off. Values FFmpeg reports as `-inf` (digital silence) or that can't be parsed are skipped, so one bad frame can no longer fail the analysis.
+- **Failed analyses were never retried** - The startup scan treated a failed analysis as done. It now re-analyzes recordings whose analysis failed, so recordings hit by the bug above are analyzed after upgrading.
+- Silence at the very start of a file was missed when FFmpeg reported its start time as slightly negative.
+
 ## [1.12.3] - 2026-11-04
 
 ### Fixed
